@@ -54,3 +54,9 @@ const int gatePassScore = 150;
 // Gate
 const double gateWidth = 140;
 const double gateHeight = 30;
+
+// Screen shake
+const double shakePlayerHitIntensity = 1.5;
+const double shakePlayerHitDuration = 0.15;
+const double shakeEnemyKillIntensity = 2.0;
+const double shakeEnemyKillDuration = 0.1;
