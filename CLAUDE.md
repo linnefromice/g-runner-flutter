@@ -115,6 +115,48 @@ TitleScreen → GameScreen (GRunnerGame) → ResultScreen
 - **Auto-fire**: Player shoots every 0.2s automatically
 - **Scoring**: Enemy kill = 100pts, Gate pass = 150pts
 
+## Development Workflow
+
+### スキル一覧
+
+| スキル | 用途 |
+|--------|------|
+| `/create-goal <topic>` | 方針整理 + RN版調査 → ゴール文書作成 |
+| `/dev-loop <goal-file>` | ゴール文書 → 設計→実装→検証の自律ループ |
+
+### ワークフロー
+
+```
+/create-goal <topic>
+  → RN版調査 + 方針整理 → docs/goals/<topic>.md
+
+/dev-loop docs/goals/<topic>.md
+  → Phase 0: Design（設計）
+  → Phase 1: Implementation（実装）
+  → Phase 2: Verify（flutter analyze + test）
+  → Phase 3: Update Plan（IMPLEMENTATION_PLAN.md 更新）
+  → <promise>DEV LOOP COMPLETE</promise>
+```
+
+### Headless 実行
+
+```bash
+./scripts/dev-loop.sh docs/goals/<topic>.md --max-iterations 10 --model claude-sonnet-4-6
+```
+
+### ゴール文書テンプレート
+
+- Minimal: `docs/goals/_template-minimal.md`
+- Standard: `docs/goals/_template-standard.md`
+
+### 設計原則
+
+| 原則 | 説明 |
+|------|------|
+| **ファイルシステム = 状態** | セッション状態を持たず、全てファイルで永続化。中断→再開が自然にできる |
+| **Promise = 完了** | 固定回数ではなく、エージェント自身が完了を宣言する |
+| **フェーズ = チェックポイント** | 各フェーズの出力が進捗記録になり、人間が途中経過を監査できる |
+
 ## Reference
 
 - RN版 (機能完全版): `../../g-runner-rn/`
