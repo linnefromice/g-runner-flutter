@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'dart:ui';
 
 import 'package:flame/components.dart';
@@ -9,6 +10,7 @@ import 'components/enemy.dart';
 import 'components/gate.dart';
 import 'components/particle.dart';
 import 'components/player.dart';
+import 'components/score_popup.dart';
 import 'data/constants.dart';
 import 'data/stage_data.dart';
 
@@ -27,6 +29,11 @@ class GRunnerGame extends FlameGame {
 
   // Callback for game end (navigates to result screen)
   void Function(GameState state, int score)? onGameEnd;
+
+  // Screen shake
+  double _shakeIntensity = 0;
+  double _shakeTimer = 0;
+  final math.Random _shakeRng = math.Random();
 
   double get logicalHeight => logicalWidth * (size.y / size.x);
 
@@ -53,6 +60,7 @@ class GRunnerGame extends FlameGame {
     super.update(dt);
 
     stageTime += dt;
+    _updateScreenShake(dt);
 
     _processSpawnEvents();
     _checkCollisions();
@@ -137,6 +145,9 @@ class GRunnerGame extends FlameGame {
         height: bullet.size.y,
       );
       if (bulletRect.overlaps(playerHitbox)) {
+        if (!player.isInvincible) {
+          _triggerShake(shakePlayerHitIntensity, shakePlayerHitDuration);
+        }
         player.takeDamage(bullet.damage);
         bullet.removeFromParent();
       }
@@ -162,6 +173,7 @@ class GRunnerGame extends FlameGame {
         gate.passed = true;
         _applyGateEffect(gate.effect);
         score += gatePassScore;
+        _spawnScorePopup(gatePassScore, gate.position.x, gate.position.y);
       }
     }
   }
@@ -172,6 +184,8 @@ class GRunnerGame extends FlameGame {
         player.atk += effect.value.toInt();
       case GateEffectType.speedMultiply:
         player.speedMultiplier *= effect.value;
+      case GateEffectType.hpRecover:
+        player.hp = (player.hp + effect.value.toInt()).clamp(0, player.maxHp);
     }
   }
 
@@ -184,10 +198,12 @@ class GRunnerGame extends FlameGame {
     ));
   }
 
-  void spawnEnemyBullet(double x, double y, int damage) {
+  void spawnEnemyBullet(double x, double y, int damage, {double? speedX, double? speedY}) {
     world.add(EnemyBullet(
       damage: damage,
       position: Vector2(x, y),
+      speedX: speedX ?? 0,
+      speedY: speedY ?? enemyBulletSpeed,
     ));
   }
 
@@ -201,6 +217,37 @@ class GRunnerGame extends FlameGame {
           ? const Color(0xFFFF6644)
           : const Color(0xFFFFAA22),
     );
+    _spawnScorePopup(enemyKillScore, enemy.position.x, enemy.position.y);
+    _triggerShake(shakeEnemyKillIntensity, shakeEnemyKillDuration);
+  }
+
+  void _triggerShake(double intensity, double duration) {
+    if (intensity > _shakeIntensity || _shakeTimer <= 0) {
+      _shakeIntensity = intensity;
+      _shakeTimer = duration;
+    }
+  }
+
+  void _updateScreenShake(double dt) {
+    if (_shakeTimer > 0) {
+      _shakeTimer -= dt;
+      final ox = (_shakeRng.nextDouble() * 2 - 1) * _shakeIntensity;
+      final oy = (_shakeRng.nextDouble() * 2 - 1) * _shakeIntensity;
+      camera.viewfinder.position = Vector2(ox, oy);
+    } else {
+      camera.viewfinder.position = Vector2.zero();
+    }
+  }
+
+  void _spawnScorePopup(int points, double x, double y) {
+    final color = points >= 150
+        ? const Color(0xFFFFD600)
+        : const Color(0xFFFFFFFF);
+    world.add(ScorePopup(
+      text: '+$points',
+      color: color,
+      position: Vector2(x, y),
+    ));
   }
 
   // --- Input (called from Flutter widget layer) ---

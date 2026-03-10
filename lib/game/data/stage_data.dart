@@ -4,7 +4,7 @@ enum SpawnEventType { enemy, gate }
 
 enum EnemyType { stationary, patrol }
 
-enum GateEffectType { atkAdd, speedMultiply }
+enum GateEffectType { atkAdd, speedMultiply, hpRecover }
 
 class GateEffect {
   final GateEffectType type;
@@ -87,7 +87,7 @@ final stage1 = StageData(
     const SpawnEvent.gate(
       time: 32,
       leftEffect: GateEffect(type: GateEffectType.atkAdd, value: 8),
-      rightEffect: GateEffect(type: GateEffectType.speedMultiply, value: 1.3),
+      rightEffect: GateEffect(type: GateEffectType.hpRecover, value: 20),
     ),
 
     // Wave 4: heavier

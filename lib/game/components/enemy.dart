@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'dart:ui';
 
 import 'package:flame/components.dart';
@@ -64,7 +65,19 @@ class Enemy extends PositionComponent with HasGameReference<GRunnerGame> {
     shootTimer -= dt;
     if (shootTimer <= 0) {
       shootTimer = shootInterval;
-      game.spawnEnemyBullet(position.x, position.y + size.y / 2, atk);
+      if (type == EnemyType.patrol) {
+        // Aimed shot toward player
+        final dx = game.player.position.x - position.x;
+        final dy = game.player.position.y - position.y;
+        final dist = math.sqrt(dx * dx + dy * dy);
+        if (dist > 0) {
+          final vx = (dx / dist) * enemyBulletSpeed;
+          final vy = (dy / dist) * enemyBulletSpeed;
+          game.spawnEnemyBullet(position.x, position.y + size.y / 2, atk, speedX: vx, speedY: vy);
+        }
+      } else {
+        game.spawnEnemyBullet(position.x, position.y + size.y / 2, atk);
+      }
     }
 
     // Hit flash decay

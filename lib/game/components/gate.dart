@@ -36,7 +36,9 @@ class Gate extends PositionComponent with HasGameReference<GRunnerGame> {
     final w = size.x;
     final h = size.y;
 
-    final color = const Color(0xFF44FF88); // Enhance green
+    final color = effect.type == GateEffectType.hpRecover
+        ? const Color(0xFFFF69B4) // Recovery pink
+        : const Color(0xFF44FF88); // Enhance green
 
     // Border glow
     canvas.drawRRect(
@@ -65,6 +67,7 @@ class Gate extends PositionComponent with HasGameReference<GRunnerGame> {
     final label = switch (effect.type) {
       GateEffectType.atkAdd => 'ATK +${effect.value.toInt()}',
       GateEffectType.speedMultiply => 'SPD x${effect.value}',
+      GateEffectType.hpRecover => 'HP +${effect.value.toInt()}',
     };
 
     final paragraphBuilder = ParagraphBuilder(ParagraphStyle(

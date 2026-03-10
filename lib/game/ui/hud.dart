@@ -39,56 +39,101 @@ class _HudOverlayState extends State<HudOverlay> {
       return const SizedBox.shrink();
     }
 
+    final progress = game.stageData.duration > 0
+        ? (game.stageTime / game.stageData.duration).clamp(0.0, 1.0)
+        : 0.0;
+
     return SafeArea(
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        child: Row(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            // HP bar
-            Expanded(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'HP ${game.player.hp}/${game.player.maxHp}',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Container(
-                    height: 8,
+            // Stage progress bar
+            Row(
+              children: [
+                Expanded(
+                  child: Container(
+                    height: 4,
                     decoration: BoxDecoration(
-                      color: Colors.white24,
-                      borderRadius: BorderRadius.circular(4),
+                      color: const Color(0xFF1A1A2E),
+                      borderRadius: BorderRadius.circular(2),
                     ),
                     child: FractionallySizedBox(
-                      widthFactor:
-                          (game.player.hp / game.player.maxHp).clamp(0.0, 1.0),
+                      widthFactor: progress,
                       alignment: Alignment.centerLeft,
                       child: Container(
                         decoration: BoxDecoration(
-                          color: _hpColor(game.player.hp, game.player.maxHp),
-                          borderRadius: BorderRadius.circular(4),
+                          color: const Color(0xFF00CCFF),
+                          borderRadius: BorderRadius.circular(2),
                         ),
                       ),
                     ),
                   ),
-                ],
-              ),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  '${(progress * 100).toInt()}%',
+                  style: const TextStyle(
+                    color: Color(0xFF00CCFF),
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                    fontFeatures: [FontFeature.tabularFigures()],
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(width: 16),
-            // Score
-            Text(
-              'SCORE ${game.score}',
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 14,
-                fontWeight: FontWeight.bold,
-              ),
+            const SizedBox(height: 6),
+            // HP + Score row
+            Row(
+              children: [
+                // HP bar
+                Expanded(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'HP ${game.player.hp}/${game.player.maxHp}',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Container(
+                        height: 8,
+                        decoration: BoxDecoration(
+                          color: Colors.white24,
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: FractionallySizedBox(
+                          widthFactor:
+                              (game.player.hp / game.player.maxHp).clamp(0.0, 1.0),
+                          alignment: Alignment.centerLeft,
+                          child: Container(
+                            decoration: BoxDecoration(
+                              color: _hpColor(game.player.hp, game.player.maxHp),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 16),
+                // Score
+                Text(
+                  'SCORE ${game.score}',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
             ),
           ],
         ),
