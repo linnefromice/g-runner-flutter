@@ -24,7 +24,7 @@ class Gate extends PositionComponent with HasGameReference<GRunnerGame> {
   @override
   void update(double dt) {
     super.update(dt);
-    position.y += baseScrollSpeed * dt;
+    position.y += game.currentScrollSpeed * dt;
 
     if (position.y > game.logicalHeight + gateHeight) {
       removeFromParent();
@@ -36,9 +36,14 @@ class Gate extends PositionComponent with HasGameReference<GRunnerGame> {
     final w = size.x;
     final h = size.y;
 
-    final color = effect.type == GateEffectType.hpRecover
-        ? const Color(0xFFFF69B4) // Recovery pink
-        : const Color(0xFF44FF88); // Enhance green
+    final Color color;
+    if (effect.type.isTradeoff) {
+      color = const Color(0xFFFFDD44); // Tradeoff yellow
+    } else if (effect.type == GateEffectType.hpRecover) {
+      color = const Color(0xFFFF69B4); // Recovery pink
+    } else {
+      color = const Color(0xFF44FF88); // Enhance green
+    }
 
     // Border glow
     canvas.drawRRect(
@@ -64,11 +69,7 @@ class Gate extends PositionComponent with HasGameReference<GRunnerGame> {
     );
 
     // Label
-    final label = switch (effect.type) {
-      GateEffectType.atkAdd => 'ATK +${effect.value.toInt()}',
-      GateEffectType.speedMultiply => 'SPD x${effect.value}',
-      GateEffectType.hpRecover => 'HP +${effect.value.toInt()}',
-    };
+    final label = _labelForEffect(effect);
 
     final paragraphBuilder = ParagraphBuilder(ParagraphStyle(
       textAlign: TextAlign.center,
@@ -79,5 +80,20 @@ class Gate extends PositionComponent with HasGameReference<GRunnerGame> {
 
     final paragraph = paragraphBuilder.build()..layout(ParagraphConstraints(width: w));
     canvas.drawParagraph(paragraph, Offset(0, (h - paragraph.height) / 2));
+  }
+
+  static String _labelForEffect(GateEffect effect) {
+    switch (effect.type) {
+      case GateEffectType.atkAdd:
+        return 'ATK +${effect.value.toInt()}';
+      case GateEffectType.speedMultiply:
+        return 'SPD x${effect.value}';
+      case GateEffectType.hpRecover:
+        return 'HP +${effect.value.toInt()}';
+      case GateEffectType.tradeoffAtkUpSpdDown:
+        return 'ATK+${effect.value.toInt()} SPD${effect.value2}';
+      case GateEffectType.tradeoffSpdUpAtkDown:
+        return 'SPD x${effect.value} ATK${effect.value2}';
+    }
   }
 }

@@ -5,8 +5,10 @@ import 'package:flame/components.dart';
 import 'package:flame/game.dart';
 
 import 'components/background.dart';
+import 'components/boss.dart';
 import 'components/bullet.dart';
 import 'components/enemy.dart';
+import 'components/ex_burst.dart';
 import 'components/gate.dart';
 import 'components/particle.dart';
 import 'components/player.dart';
@@ -14,7 +16,7 @@ import 'components/score_popup.dart';
 import 'data/constants.dart';
 import 'data/stage_data.dart';
 
-enum GameState { playing, gameOver, stageClear }
+enum GameState { playing, paused, gameOver, stageClear }
 
 class GRunnerGame extends FlameGame {
   final StageData stageData;
@@ -35,7 +37,40 @@ class GRunnerGame extends FlameGame {
   double _shakeTimer = 0;
   final math.Random _shakeRng = math.Random();
 
+  // Combo & Awakening
+  int comboCount = 0;
+  bool isAwakened = false;
+  double awakenedTimer = 0;
+  double _slowMotionTimer = 0;
+  double _slowMotionFactor = 1.0;
+
+  // EX Burst
+  double exGauge = 0;
+  bool isExBurstActive = false;
+
+  // Transform system
+  double transformGauge = 0;
+  FormType primaryForm = FormType.standard;
+  FormType secondaryForm = FormType.heavyArtillery;
+  bool _isOnPrimaryForm = true;
+
+  // Boss
+  Boss? currentBoss;
+  bool isBossPhase = false;
+
+  // Upgrade bonuses (set from GameProgress before game starts)
+  int upgradeBonusAtk = 0;
+  int upgradeBonusHp = 0;
+  double upgradeBonusSpeedMultiplier = 1.0;
+  double upgradeBonusDefMultiplier = 1.0;
+
+  // Credits earned during this session
+  int creditsEarned = 0;
+
   double get logicalHeight => logicalWidth * (size.y / size.x);
+
+  double get currentScrollSpeed =>
+      isBossPhase ? baseScrollSpeed * bossScrollSpeedMultiplier : baseScrollSpeed;
 
   double get _scale => size.x / logicalWidth;
 
@@ -51,19 +86,38 @@ class GRunnerGame extends FlameGame {
 
     player = Player();
     player.position = Vector2(logicalWidth / 2, logicalHeight * 0.75);
+    // Apply upgrade bonuses
+    player.atk += upgradeBonusAtk;
+    player.hp += upgradeBonusHp;
+    player.maxHp += upgradeBonusHp;
+    player.speedMultiplier *= upgradeBonusSpeedMultiplier;
+    player.defMultiplier = upgradeBonusDefMultiplier;
     world.add(player);
   }
 
   @override
   void update(double dt) {
     if (state != GameState.playing) return;
-    super.update(dt);
 
-    stageTime += dt;
-    _updateScreenShake(dt);
+    // Apply slow motion factor
+    final effectiveDt = dt * _slowMotionFactor;
+    if (_slowMotionTimer > 0) {
+      _slowMotionTimer -= dt; // real time, not slowed
+      if (_slowMotionTimer <= 0) {
+        _slowMotionFactor = 1.0;
+      }
+    }
+
+    super.update(effectiveDt);
+
+    stageTime += effectiveDt;
+    _updateScreenShake(effectiveDt);
+    _updateAwakening(effectiveDt);
+    _updateTransformGauge(effectiveDt);
 
     _processSpawnEvents();
     _checkCollisions();
+    _checkContactDamage();
     _checkGateCollisions();
 
     if (player.hp <= 0) {
@@ -71,14 +125,212 @@ class GRunnerGame extends FlameGame {
       onGameEnd?.call(state, score);
     }
 
-    if (stageTime >= stageData.duration) {
+    // Stage clear: boss stages clear on boss defeat, normal stages clear when time + enemies done
+    if (!stageData.hasBoss && stageTime >= stageData.duration) {
       final enemies = world.children.whereType<Enemy>();
       if (enemies.isEmpty) {
+        creditsEarned += creditPerStageClear;
         state = GameState.stageClear;
         onGameEnd?.call(state, score);
       }
     }
   }
+
+  // --- Combo & Awakening ---
+
+  void incrementCombo() {
+    comboCount++;
+    if (comboCount >= comboThreshold && !isAwakened) {
+      _activateAwakening();
+    }
+  }
+
+  void resetCombo() {
+    comboCount = 0;
+  }
+
+  void _activateAwakening() {
+    isAwakened = true;
+    awakenedTimer = awakenedDuration;
+    comboCount = 0;
+
+    // Slow motion effect
+    _slowMotionFactor = awakenedSlowMotionFactor;
+    _slowMotionTimer = awakenedSlowMotionDuration;
+
+    // Apply awakening buffs to player
+    player.awakenedAtkMultiplier = awakenedAtkMultiplier;
+    player.awakenedSpeedMultiplier = awakenedSpeedMultiplier;
+    player.awakenedFireRateMultiplier = awakenedFireRateMultiplier;
+    player.isAwakenedInvincible = true;
+    player.isAwakened = true;
+  }
+
+  void _deactivateAwakening() {
+    isAwakened = false;
+    awakenedTimer = 0;
+    comboCount = 0;
+
+    player.awakenedAtkMultiplier = 1.0;
+    player.awakenedSpeedMultiplier = 1.0;
+    player.awakenedFireRateMultiplier = 1.0;
+    player.isAwakenedInvincible = false;
+    player.isAwakened = false;
+  }
+
+  void _updateAwakening(double dt) {
+    if (!isAwakened) return;
+    awakenedTimer -= dt;
+    if (awakenedTimer <= 0) {
+      _deactivateAwakening();
+    }
+  }
+
+  bool get awakenedWarning => isAwakened && awakenedTimer <= awakenedWarningTime;
+
+  // --- EX Burst ---
+
+  void addExGauge(double amount) {
+    if (isExBurstActive) return;
+    exGauge = (exGauge + amount).clamp(0, exGaugeMax);
+  }
+
+  void activateExBurst() {
+    if (exGauge < exGaugeMax || isExBurstActive) return;
+    exGauge = 0;
+    isExBurstActive = true;
+    world.add(ExBurst());
+  }
+
+  void onExBurstEnd() {
+    isExBurstActive = false;
+  }
+
+  void applyExBurstDamage(double beamLeft, double beamRight, double beamBottom) {
+    // Damage enemies in beam
+    final enemies = world.children.whereType<Enemy>().toList();
+    for (final enemy in enemies) {
+      if (!enemy.isMounted) continue;
+      if (enemy.position.x >= beamLeft &&
+          enemy.position.x <= beamRight &&
+          enemy.position.y <= beamBottom) {
+        enemy.takeDamage(exBurstDamage.toInt());
+      }
+    }
+
+    // Destroy enemy bullets in beam
+    final enemyBullets = world.children.whereType<EnemyBullet>().toList();
+    for (final bullet in enemyBullets) {
+      if (!bullet.isMounted) continue;
+      if (bullet.position.x >= beamLeft &&
+          bullet.position.x <= beamRight &&
+          bullet.position.y <= beamBottom) {
+        bullet.removeFromParent();
+      }
+    }
+
+    // Damage boss in beam
+    final boss = currentBoss;
+    if (boss != null && boss.isMounted) {
+      if (boss.position.x >= beamLeft &&
+          boss.position.x <= beamRight &&
+          boss.position.y <= beamBottom) {
+        boss.takeDamage(exBurstDamage.toInt());
+      }
+    }
+
+    // Damage boss drones in beam
+    final drones = world.children.whereType<BossDrone>().toList();
+    for (final drone in drones) {
+      if (!drone.isMounted) continue;
+      if (drone.position.x >= beamLeft &&
+          drone.position.x <= beamRight &&
+          drone.position.y <= beamBottom) {
+        drone.takeDamage(exBurstDamage.toInt());
+      }
+    }
+
+    // Destroy tradeoff gates in beam
+    final gates = world.children.whereType<Gate>().toList();
+    for (final gate in gates) {
+      if (!gate.isMounted || gate.passed) continue;
+      if (gate.effect.type == GateEffectType.tradeoffAtkUpSpdDown ||
+          gate.effect.type == GateEffectType.tradeoffSpdUpAtkDown) {
+        if (gate.position.x >= beamLeft &&
+            gate.position.x <= beamRight &&
+            gate.position.y <= beamBottom) {
+          gate.removeFromParent();
+        }
+      }
+    }
+  }
+
+  // --- Transform System ---
+
+  void _updateTransformGauge(double dt) {
+    if (isExBurstActive || isAwakened) return;
+    // Passive gauge gain
+    addTransformGauge(transformGainPerSecond * dt);
+  }
+
+  void addTransformGauge(double amount) {
+    if (isAwakened) return;
+    transformGauge = (transformGauge + amount).clamp(0, transformGaugeMax);
+  }
+
+  FormDefinition _formDefinitionFor(FormType type) {
+    switch (type) {
+      case FormType.standard:
+        return formStandard;
+      case FormType.heavyArtillery:
+        return formHeavyArtillery;
+      case FormType.highSpeed:
+        return formHighSpeed;
+    }
+  }
+
+  void activateTransform() {
+    if (transformGauge < transformGaugeMax || isAwakened) return;
+    transformGauge = 0;
+    _isOnPrimaryForm = !_isOnPrimaryForm;
+    final newFormType = _isOnPrimaryForm ? primaryForm : secondaryForm;
+    player.currentForm = _formDefinitionFor(newFormType);
+    player.applyTransformBonus();
+  }
+
+  void handleTransformTap() {
+    if (state != GameState.playing) return;
+    activateTransform();
+  }
+
+  // --- Boss ---
+
+  void onBossPhaseStarted() {
+    isBossPhase = true;
+  }
+
+  void onBossDefeated(Boss boss) {
+    isBossPhase = false;
+    currentBoss = null;
+    score += bossKillScore;
+    creditsEarned += creditPerBossDefeat;
+    creditsEarned += creditPerStageClear;
+    _spawnScorePopup(bossKillScore, boss.position.x, boss.position.y);
+    triggerShake(bossDeathShakeIntensity, bossDeathShakeDuration);
+
+    // Big explosion particles (16 directions)
+    spawnKillParticles(
+      (p) => world.add(p),
+      boss.position.x,
+      boss.position.y,
+      const Color(0xFFFF2244),
+    );
+
+    state = GameState.stageClear;
+    onGameEnd?.call(state, score);
+  }
+
+  // --- Spawn Events ---
 
   void _processSpawnEvents() {
     final timeline = stageData.timeline;
@@ -87,27 +339,37 @@ class GRunnerGame extends FlameGame {
       final event = timeline[_spawnIndex];
       switch (event.type) {
         case SpawnEventType.enemy:
-          world.add(Enemy(
-            type: event.enemyType!,
-            position: Vector2(event.x!, -20),
-          ));
+          if (!isBossPhase) {
+            world.add(Enemy(
+              type: event.enemyType!,
+              position: Vector2(event.x!, -20),
+            ));
+          }
         case SpawnEventType.gate:
-          final leftX = gateWidth / 2;
-          final rightX = logicalWidth - gateWidth / 2;
-          world.add(Gate(
-            effect: event.leftEffect!,
-            isLeft: true,
-            position: Vector2(leftX, -gateHeight),
-          ));
-          world.add(Gate(
-            effect: event.rightEffect!,
-            isLeft: false,
-            position: Vector2(rightX, -gateHeight),
-          ));
+          if (!isBossPhase) {
+            final leftX = gateWidth / 2;
+            final rightX = logicalWidth - gateWidth / 2;
+            world.add(Gate(
+              effect: event.leftEffect!,
+              isLeft: true,
+              position: Vector2(leftX, -gateHeight),
+            ));
+            world.add(Gate(
+              effect: event.rightEffect!,
+              isLeft: false,
+              position: Vector2(rightX, -gateHeight),
+            ));
+          }
+        case SpawnEventType.boss:
+          final boss = Boss();
+          currentBoss = boss;
+          world.add(boss);
       }
       _spawnIndex++;
     }
   }
+
+  // --- Collision Detection ---
 
   void _checkCollisions() {
     final playerBullets = world.children.whereType<PlayerBullet>().toList();
@@ -121,17 +383,101 @@ class GRunnerGame extends FlameGame {
         width: bullet.size.x,
         height: bullet.size.y,
       );
-      for (final enemy in enemies) {
-        if (!enemy.isMounted) continue;
-        final enemyRect = Rect.fromCenter(
-          center: Offset(enemy.position.x, enemy.position.y),
-          width: enemy.size.x,
-          height: enemy.size.y,
+
+      if (bullet.bulletType == BulletType.explosion) {
+        // Explosion bullet: on first hit, deal AoE damage to all enemies in radius
+        for (final enemy in enemies) {
+          if (!enemy.isMounted) continue;
+          final enemyRect = Rect.fromCenter(
+            center: Offset(enemy.position.x, enemy.position.y),
+            width: enemy.size.x,
+            height: enemy.size.y,
+          );
+          if (bulletRect.overlaps(enemyRect)) {
+            // AoE damage to all enemies within explosion radius
+            _applyExplosionDamage(
+                bullet.position.x, bullet.position.y, bullet.damage);
+            bullet.removeFromParent();
+            break;
+          }
+        }
+      } else if (bullet.isPierce) {
+        // Pierce bullet: passes through enemies, hitting each once
+        for (final enemy in enemies) {
+          if (!enemy.isMounted) continue;
+          final enemyRect = Rect.fromCenter(
+            center: Offset(enemy.position.x, enemy.position.y),
+            width: enemy.size.x,
+            height: enemy.size.y,
+          );
+          if (bulletRect.overlaps(enemyRect)) {
+            enemy.takeDamage(bullet.damage, bulletCenterY: bullet.position.y);
+            // Don't break — pierce hits all overlapping enemies
+          }
+        }
+      } else {
+        // Normal bullet
+        for (final enemy in enemies) {
+          if (!enemy.isMounted) continue;
+          final enemyRect = Rect.fromCenter(
+            center: Offset(enemy.position.x, enemy.position.y),
+            width: enemy.size.x,
+            height: enemy.size.y,
+          );
+          if (bulletRect.overlaps(enemyRect)) {
+            enemy.takeDamage(bullet.damage, bulletCenterY: bullet.position.y);
+            bullet.removeFromParent();
+            break;
+          }
+        }
+      }
+    }
+
+    // Player bullets → Boss
+    final boss = currentBoss;
+    if (boss != null && boss.isMounted && boss.phase != BossPhase.entering) {
+      final bossRect = Rect.fromCenter(
+        center: Offset(boss.position.x, boss.position.y),
+        width: boss.size.x,
+        height: boss.size.y,
+      );
+      for (final bullet in playerBullets) {
+        if (!bullet.isMounted) continue;
+        final bulletRect = Rect.fromCenter(
+          center: Offset(bullet.position.x, bullet.position.y),
+          width: bullet.size.x,
+          height: bullet.size.y,
         );
-        if (bulletRect.overlaps(enemyRect)) {
-          enemy.takeDamage(bullet.damage);
-          bullet.removeFromParent();
-          break;
+        if (bulletRect.overlaps(bossRect)) {
+          boss.takeDamage(bullet.damage);
+          if (!bullet.isPierce) {
+            bullet.removeFromParent();
+          }
+        }
+      }
+    }
+
+    // Player bullets → Boss Drones
+    final drones = world.children.whereType<BossDrone>().toList();
+    for (final drone in drones) {
+      if (!drone.isMounted) continue;
+      final droneRect = Rect.fromCenter(
+        center: Offset(drone.position.x, drone.position.y),
+        width: drone.size.x,
+        height: drone.size.y,
+      );
+      for (final bullet in playerBullets) {
+        if (!bullet.isMounted) continue;
+        final bulletRect = Rect.fromCenter(
+          center: Offset(bullet.position.x, bullet.position.y),
+          width: bullet.size.x,
+          height: bullet.size.y,
+        );
+        if (bulletRect.overlaps(droneRect)) {
+          drone.takeDamage(bullet.damage);
+          if (!bullet.isPierce) {
+            bullet.removeFromParent();
+          }
         }
       }
     }
@@ -145,11 +491,58 @@ class GRunnerGame extends FlameGame {
         height: bullet.size.y,
       );
       if (bulletRect.overlaps(playerHitbox)) {
-        if (!player.isInvincible) {
-          _triggerShake(shakePlayerHitIntensity, shakePlayerHitDuration);
+        if (!player.isInvincible && !player.isAwakenedInvincible) {
+          triggerShake(shakePlayerHitIntensity, shakePlayerHitDuration);
+          player.takeDamage(bullet.damage);
+          resetCombo();
         }
-        player.takeDamage(bullet.damage);
         bullet.removeFromParent();
+      }
+    }
+  }
+
+  void _applyExplosionDamage(double x, double y, int damage) {
+    final enemies = world.children.whereType<Enemy>().toList();
+    for (final enemy in enemies) {
+      if (!enemy.isMounted) continue;
+      final dx = enemy.position.x - x;
+      final dy = enemy.position.y - y;
+      final dist = dx * dx + dy * dy;
+      if (dist <= explosionRadius * explosionRadius) {
+        enemy.takeDamage(damage);
+      }
+    }
+    // Spawn explosion visual (reuse particle system with larger burst)
+    spawnKillParticles(
+      (p) => world.add(p),
+      x,
+      y,
+      const Color(0xFFFF6600),
+    );
+  }
+
+  void _checkContactDamage() {
+    final enemies = world.children.whereType<Enemy>().toList();
+    final playerHitbox = player.hitbox;
+
+    for (final enemy in enemies) {
+      if (!enemy.isMounted) continue;
+      if (enemy.type != EnemyType.rush && enemy.type != EnemyType.swarm) continue;
+
+      final enemyRect = Rect.fromCenter(
+        center: Offset(enemy.position.x, enemy.position.y),
+        width: enemy.size.x,
+        height: enemy.size.y,
+      );
+      if (playerHitbox.overlaps(enemyRect)) {
+        if (!player.isInvincible && !player.isAwakenedInvincible) {
+          triggerShake(shakePlayerHitIntensity, shakePlayerHitDuration);
+          player.takeDamage(enemy.atk);
+          resetCombo();
+        }
+        // Kill the enemy on contact
+        onEnemyKilled(enemy);
+        enemy.removeFromParent();
       }
     }
   }
@@ -174,6 +567,17 @@ class GRunnerGame extends FlameGame {
         _applyGateEffect(gate.effect);
         score += gatePassScore;
         _spawnScorePopup(gatePassScore, gate.position.x, gate.position.y);
+
+        // Combo: Gate pass increments combo (non-tradeoff gates)
+        if (!gate.effect.type.isTradeoff) {
+          incrementCombo();
+        }
+
+        // EX gauge
+        addExGauge(exGainOnGatePass);
+
+        // Transform gauge
+        addTransformGauge(transformGainOnGatePass);
       }
     }
   }
@@ -186,6 +590,12 @@ class GRunnerGame extends FlameGame {
         player.speedMultiplier *= effect.value;
       case GateEffectType.hpRecover:
         player.hp = (player.hp + effect.value.toInt()).clamp(0, player.maxHp);
+      case GateEffectType.tradeoffAtkUpSpdDown:
+        player.atk += effect.value.toInt();
+        player.speedMultiplier *= effect.value2!;
+      case GateEffectType.tradeoffSpdUpAtkDown:
+        player.speedMultiplier *= effect.value;
+        player.atk = (player.atk * effect.value2!).round();
     }
   }
 
@@ -193,8 +603,10 @@ class GRunnerGame extends FlameGame {
 
   void spawnPlayerBullet(double x, double y) {
     world.add(PlayerBullet(
-      damage: player.atk,
+      damage: player.effectiveAtk,
       position: Vector2(x, y),
+      bulletType: player.activeBulletType,
+      color: player.activeBulletColor,
     ));
   }
 
@@ -207,21 +619,99 @@ class GRunnerGame extends FlameGame {
     ));
   }
 
+  int _scoreForEnemy(EnemyType type) {
+    switch (type) {
+      case EnemyType.rush:
+        return rushKillScore;
+      case EnemyType.swarm:
+        return swarmKillScore;
+      case EnemyType.phalanx:
+        return phalanxKillScore;
+      case EnemyType.juggernaut:
+        return juggernautKillScore;
+      case EnemyType.dodger:
+        return dodgerKillScore;
+      case EnemyType.splitter:
+        return splitterKillScore;
+      case EnemyType.summoner:
+        return summonerKillScore;
+      case EnemyType.sentinel:
+        return sentinelKillScore;
+      case EnemyType.carrier:
+        return carrierKillScore;
+      default:
+        return enemyKillScore;
+    }
+  }
+
+  int _creditForEnemy(EnemyType type) {
+    switch (type) {
+      case EnemyType.stationary:
+        return creditPerStationary;
+      case EnemyType.patrol:
+        return creditPerPatrol;
+      case EnemyType.rush:
+        return creditPerRush;
+      case EnemyType.swarm:
+        return creditPerSwarm;
+      case EnemyType.phalanx:
+        return creditPerPhalanx;
+      case EnemyType.juggernaut:
+        return creditPerJuggernaut;
+      case EnemyType.dodger:
+        return creditPerDodger;
+      case EnemyType.splitter:
+        return creditPerSplitter;
+      case EnemyType.summoner:
+        return creditPerSummoner;
+      case EnemyType.sentinel:
+        return creditPerSentinel;
+      case EnemyType.carrier:
+        return creditPerCarrier;
+    }
+  }
+
   void onEnemyKilled(Enemy enemy) {
-    score += enemyKillScore;
+    final killScore = _scoreForEnemy(enemy.type);
+    score += killScore;
+    creditsEarned += _creditForEnemy(enemy.type);
     spawnKillParticles(
       (p) => world.add(p),
       enemy.position.x,
       enemy.position.y,
-      enemy.type == EnemyType.stationary
-          ? const Color(0xFFFF6644)
-          : const Color(0xFFFFAA22),
+      enemy.colorForType,
     );
-    _spawnScorePopup(enemyKillScore, enemy.position.x, enemy.position.y);
-    _triggerShake(shakeEnemyKillIntensity, shakeEnemyKillDuration);
+    _spawnScorePopup(killScore, enemy.position.x, enemy.position.y);
+    triggerShake(shakeEnemyKillIntensity, shakeEnemyKillDuration);
+
+    // EX gauge
+    addExGauge(exGainOnEnemyKill);
+
+    // Transform gauge
+    addTransformGauge(transformGainOnEnemyKill);
+
+    // Splitter: spawn swarms on death
+    if (enemy.type == EnemyType.splitter) {
+      for (final offset in splitterSpawnOffsets) {
+        world.add(Enemy(
+          type: EnemyType.swarm,
+          position: Vector2(enemy.position.x + offset, enemy.position.y),
+        ));
+      }
+    }
   }
 
-  void _triggerShake(double intensity, double duration) {
+  // --- Pause ---
+
+  void togglePause() {
+    if (state == GameState.playing) {
+      state = GameState.paused;
+    } else if (state == GameState.paused) {
+      state = GameState.playing;
+    }
+  }
+
+  void triggerShake(double intensity, double duration) {
     if (intensity > _shakeIntensity || _shakeTimer <= 0) {
       _shakeIntensity = intensity;
       _shakeTimer = duration;
@@ -266,5 +756,10 @@ class GRunnerGame extends FlameGame {
     if (state != GameState.playing) return;
     player.targetX = globalPosition.dx / _scale;
     player.targetY = globalPosition.dy / _scale;
+  }
+
+  void handleExBurstTap() {
+    if (state != GameState.playing) return;
+    activateExBurst();
   }
 }

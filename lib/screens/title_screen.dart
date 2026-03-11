@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import 'game_screen.dart';
+import 'stage_select_screen.dart';
 
 class TitleScreen extends StatelessWidget {
   const TitleScreen({super.key});
@@ -40,7 +40,7 @@ class TitleScreen extends StatelessWidget {
               label: 'START',
               onPressed: () {
                 Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const GameScreen()),
+                  MaterialPageRoute(builder: (_) => const StageSelectScreen()),
                 );
               },
             ),

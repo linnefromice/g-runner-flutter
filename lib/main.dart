@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import 'data/game_progress.dart';
 import 'screens/title_screen.dart';
 
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   // Lock to portrait mode (shooter game)
   SystemChrome.setPreferredOrientations([
@@ -11,6 +12,9 @@ void main() {
   ]);
   // Hide status bar for full-screen game feel
   SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+
+  // Load saved progress
+  await GameProgress.load();
 
   runApp(const GRunnerApp());
 }

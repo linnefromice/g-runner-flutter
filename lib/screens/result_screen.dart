@@ -1,16 +1,21 @@
 import 'package:flutter/material.dart';
 
-import 'game_screen.dart';
+import 'stage_select_screen.dart';
 import 'title_screen.dart';
+import 'upgrade_shop_screen.dart';
 
 class ResultScreen extends StatelessWidget {
   final bool isVictory;
   final int score;
+  final int stageId;
+  final int creditsEarned;
 
   const ResultScreen({
     super.key,
     required this.isVictory,
     required this.score,
+    required this.stageId,
+    required this.creditsEarned,
   });
 
   @override
@@ -54,16 +59,45 @@ class ResultScreen extends StatelessWidget {
                 fontWeight: FontWeight.bold,
               ),
             ),
+            const SizedBox(height: 16),
+            // Credits earned
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.monetization_on,
+                    color: Color(0xFFFFD600), size: 20),
+                const SizedBox(width: 6),
+                Text(
+                  '+$creditsEarned',
+                  style: const TextStyle(
+                    color: Color(0xFFFFD600),
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
             const SizedBox(height: 48),
             _ResultButton(
-              label: 'RETRY',
+              label: 'STAGES',
               onPressed: () {
-                Navigator.of(context).pushReplacement(
-                  MaterialPageRoute(builder: (_) => const GameScreen()),
+                Navigator.of(context).pushAndRemoveUntil(
+                  MaterialPageRoute(builder: (_) => const StageSelectScreen()),
+                  (route) => route.isFirst,
                 );
               },
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 12),
+            _ResultButton(
+              label: 'UPGRADE',
+              onPressed: () {
+                Navigator.of(context).pushAndRemoveUntil(
+                  MaterialPageRoute(builder: (_) => const UpgradeShopScreen()),
+                  (route) => route.isFirst,
+                );
+              },
+            ),
+            const SizedBox(height: 12),
             _ResultButton(
               label: 'TITLE',
               onPressed: () {

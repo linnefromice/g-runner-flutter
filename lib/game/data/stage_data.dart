@@ -1,16 +1,29 @@
 // Stage timeline definitions
 
-enum SpawnEventType { enemy, gate }
+enum SpawnEventType { enemy, gate, boss }
 
-enum EnemyType { stationary, patrol }
+enum EnemyType {
+  stationary, patrol, rush, swarm, phalanx,
+  juggernaut, dodger, splitter, summoner, sentinel, carrier,
+}
 
-enum GateEffectType { atkAdd, speedMultiply, hpRecover }
+enum GateEffectType {
+  atkAdd,
+  speedMultiply,
+  hpRecover,
+  tradeoffAtkUpSpdDown,
+  tradeoffSpdUpAtkDown;
+
+  bool get isTradeoff =>
+      this == tradeoffAtkUpSpdDown || this == tradeoffSpdUpAtkDown;
+}
 
 class GateEffect {
   final GateEffectType type;
   final double value;
+  final double? value2; // secondary value for tradeoff gates
 
-  const GateEffect({required this.type, required this.value});
+  const GateEffect({required this.type, required this.value, this.value2});
 }
 
 class SpawnEvent {
@@ -40,6 +53,14 @@ class SpawnEvent {
   })  : type = SpawnEventType.gate,
         enemyType = null,
         x = null;
+
+  const SpawnEvent.boss({
+    required this.time,
+  })  : type = SpawnEventType.boss,
+        enemyType = null,
+        x = null,
+        leftEffect = null,
+        rightEffect = null;
 }
 
 class StageData {
@@ -47,12 +68,16 @@ class StageData {
   final String name;
   final double duration; // seconds
   final List<SpawnEvent> timeline;
+  final bool hasBoss;
+  final int creditReward; // base credits for clearing
 
   const StageData({
     required this.id,
     required this.name,
     required this.duration,
     required this.timeline,
+    this.hasBoss = false,
+    this.creditReward = 50,
   });
 }
 

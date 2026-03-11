@@ -1,3 +1,5 @@
+import 'dart:ui';
+
 // Game balance constants — mirrors RN version's balance.ts (simplified for MVP)
 
 // Coordinate system
@@ -42,6 +44,57 @@ class EnemyStats {
 
 const stationaryStats = EnemyStats(hp: 20, atk: 10, shootInterval: 2.0, moveSpeed: 0);
 const patrolStats = EnemyStats(hp: 40, atk: 10, shootInterval: 2.5, moveSpeed: 60);
+const rushStats = EnemyStats(hp: 15, atk: 15, shootInterval: 0, moveSpeed: 200);
+const swarmStats = EnemyStats(hp: 1, atk: 5, shootInterval: 0, moveSpeed: 0);
+const phalanxStats = EnemyStats(hp: 60, atk: 15, shootInterval: 2.0, moveSpeed: 40);
+const juggernautStats = EnemyStats(hp: 120, atk: 25, shootInterval: 1.5, moveSpeed: 0);
+const dodgerStats = EnemyStats(hp: 35, atk: 12, shootInterval: 1.8, moveSpeed: 120);
+const splitterStats = EnemyStats(hp: 50, atk: 8, shootInterval: 2.0, moveSpeed: 0);
+const summonerStats = EnemyStats(hp: 80, atk: 0, shootInterval: 0, moveSpeed: 0);
+const sentinelStats = EnemyStats(hp: 120, atk: 15, shootInterval: 2.0, moveSpeed: 0);
+const carrierStats = EnemyStats(hp: 100, atk: 0, shootInterval: 0, moveSpeed: 36);
+
+// Swarm sine wave parameters
+const double swarmSineAmplitude = 40; // horizontal wobble amplitude
+const double swarmSineFrequency = 3.0; // wobble frequency
+
+// Phalanx shield damage reduction
+const double phalanxShieldDamageMultiplier = 0.5;
+
+// Juggernaut
+const double juggernautScrollFactor = 0.3;
+const double juggernautSineAmplitude = 20;
+
+// Dodger
+const double dodgerDetectRadius = 60;
+const double dodgerDetectRange = 120;
+const double dodgerCooldown = 0.8;
+
+// Splitter — spawns 3 swarms on death
+const List<double> splitterSpawnOffsets = [-20, 0, 20];
+
+// Summoner
+const double summonerSpawnInterval = 3.0;
+const int summonerMaxSpawns = 6;
+
+// Sentinel
+const double sentinelShieldReduction = 0.5;
+
+// Carrier
+const double carrierScrollFactor = 0.5;
+const double carrierPatrolSpeedFactor = 0.6;
+const double carrierSpawnInterval = 5.0;
+
+// Scoring per enemy type
+const int rushKillScore = 100;
+const int swarmKillScore = 30;
+const int phalanxKillScore = 300;
+const int juggernautKillScore = 500;
+const int dodgerKillScore = 250;
+const int splitterKillScore = 200;
+const int summonerKillScore = 400;
+const int sentinelKillScore = 600;
+const int carrierKillScore = 500;
 
 // I-frame
 const double iframeDuration = 1.2; // seconds
@@ -54,6 +107,160 @@ const int gatePassScore = 150;
 // Gate
 const double gateWidth = 140;
 const double gateHeight = 30;
+
+// Combo & Awakening
+const int comboThreshold = 3;
+const double awakenedDuration = 10.0; // seconds
+const double awakenedAtkMultiplier = 2.0;
+const double awakenedSpeedMultiplier = 1.2;
+const double awakenedFireRateMultiplier = 1.3;
+const double awakenedWarningTime = 3.0; // seconds before expiry
+const double awakenedSlowMotionFactor = 0.3;
+const double awakenedSlowMotionDuration = 0.3; // seconds
+
+// EX Burst
+const double exGaugeMax = 100;
+const double exGainOnEnemyKill = 5;
+const double exGainOnGatePass = 10;
+const double exGainOnBossHit = 2;
+const double exBurstDuration = 2.0; // seconds
+const double exBurstDamage = 50; // per tick
+const double exBurstTickInterval = 0.1; // seconds
+const double exBurstWidth = 80; // logical units
+
+// Form definitions
+enum FormType { standard, heavyArtillery, highSpeed }
+
+class FormDefinition {
+  final FormType type;
+  final String name;
+  final double speedMultiplier;
+  final double atkMultiplier;
+  final double fireRateMultiplier;
+  final BulletType bulletType;
+  final Color bulletColor;
+
+  const FormDefinition({
+    required this.type,
+    required this.name,
+    required this.speedMultiplier,
+    required this.atkMultiplier,
+    required this.fireRateMultiplier,
+    required this.bulletType,
+    required this.bulletColor,
+  });
+}
+
+enum BulletType { normal, explosion, pierce }
+
+const formStandard = FormDefinition(
+  type: FormType.standard,
+  name: 'Standard',
+  speedMultiplier: 1.0,
+  atkMultiplier: 1.0,
+  fireRateMultiplier: 1.0,
+  bulletType: BulletType.normal,
+  bulletColor: Color(0xFF00D4FF),
+);
+
+const formHeavyArtillery = FormDefinition(
+  type: FormType.heavyArtillery,
+  name: 'Heavy Artillery',
+  speedMultiplier: 0.8,
+  atkMultiplier: 1.8,
+  fireRateMultiplier: 0.6,
+  bulletType: BulletType.explosion,
+  bulletColor: Color(0xFFFF6600),
+);
+
+const formHighSpeed = FormDefinition(
+  type: FormType.highSpeed,
+  name: 'High Speed',
+  speedMultiplier: 1.4,
+  atkMultiplier: 0.7,
+  fireRateMultiplier: 1.5,
+  bulletType: BulletType.pierce,
+  bulletColor: Color(0xFF00FF88),
+);
+
+// Transform gauge
+const double transformGaugeMax = 100;
+const double transformGainOnEnemyKill = 8;
+const double transformGainOnGatePass = 12;
+const double transformGainPerSecond = 2;
+
+// Transform bonus (after switching forms)
+const double transformBonusDuration = 5.0; // seconds
+const double transformBonusAtkMultiplier = 1.25;
+const double transformBonusSpeedMultiplier = 1.15;
+const double transformBonusFireRateMultiplier = 1.2;
+const int transformBonusHpHeal = 5;
+
+// Explosion bullet
+const double explosionRadius = 40; // logical units
+
+// Boss
+const int bossHp = 500;
+const int bossAtk = 15;
+const double bossWidth = 200;
+const double bossHeight = 120;
+const double bossHoverY = 40; // target Y position
+const double bossSlideSpeed = 30; // units/sec during entrance
+const double bossHoverAmplitude = 30;
+const double bossHoverPeriod = 3.0; // seconds
+const double bossShootInterval1 = 2.0; // Phase 1
+const double bossShootInterval2 = 1.2; // Phase 2
+const double bossShootInterval3 = 1.0; // Phase 3
+const int bossSpreadCount = 5;
+const double bossSpreadAngle = 15.0; // degrees between bullets
+const double bossBulletSpeed = 200;
+const double bossPhase2Threshold = 0.66;
+const double bossPhase3Threshold = 0.33;
+const int bossDroneCount = 3;
+const int bossDroneHp = 25;
+const double bossScrollSpeedMultiplier = 0.5;
+const int bossKillScore = 5000;
+const double bossDeathShakeIntensity = 8.0;
+const double bossDeathShakeDuration = 0.3;
+
+// Boss laser
+const double bossLaserWarningDuration = 1.0; // seconds
+const double bossLaserFireDuration = 1.5; // seconds
+const double bossLaserWidth = 30; // logical units (Boss 1/2)
+const double bossLaserWidthBoss3 = 40; // logical units (Boss 3+)
+const int bossLaserDamage = 20; // per tick
+const double bossLaserTickInterval = 0.3; // seconds
+const double bossLaserCooldown = 4.0; // seconds
+const double bossLaserPulseSpeed = 8.0; // rad/s for warning animation
+
+// Credits (currency)
+const int creditPerStationary = 1;
+const int creditPerPatrol = 2;
+const int creditPerRush = 1;
+const int creditPerSwarm = 0;
+const int creditPerPhalanx = 4;
+const int creditPerJuggernaut = 7;
+const int creditPerDodger = 3;
+const int creditPerSplitter = 3;
+const int creditPerSummoner = 5;
+const int creditPerSentinel = 7;
+const int creditPerCarrier = 6;
+const int creditPerStageClear = 50;
+const int creditPerBossDefeat = 150;
+
+// Upgrades
+const int maxAtkLevel = 10;
+const int maxHpLevel = 10;
+const int maxSpeedLevel = 5;
+const int maxDefLevel = 5;
+const int atkUpgradePerLevel = 2;
+const int hpUpgradePerLevel = 10;
+const double speedUpgradePerLevel = 0.05;
+const double defUpgradePerLevel = 0.03;
+const int atkUpgradeCostBase = 100;
+const int hpUpgradeCostBase = 100;
+const int speedUpgradeCostBase = 100;
+const int defUpgradeCostBase = 150;
 
 // Screen shake
 const double shakePlayerHitIntensity = 1.5;

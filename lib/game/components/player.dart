@@ -10,6 +10,7 @@ class Player extends PositionComponent with HasGameReference<GRunnerGame> {
   int maxHp = playerInitialHp;
   int atk = playerInitialAtk;
   double speedMultiplier = 1.0;
+  double defMultiplier = 1.0; // DEF upgrade: damage reduction
 
   // Tap-to-move target
   double? targetX;
@@ -24,11 +25,47 @@ class Player extends PositionComponent with HasGameReference<GRunnerGame> {
   // Fire timer
   double fireTimer = 0;
 
+  // Awakening state (controlled by GRunnerGame)
+  bool isAwakened = false;
+  bool isAwakenedInvincible = false;
+  double awakenedAtkMultiplier = 1.0;
+  double awakenedSpeedMultiplier = 1.0;
+  double awakenedFireRateMultiplier = 1.0;
+
+  // Form system
+  FormDefinition currentForm = formStandard;
+
+  // Transform bonus
+  double transformBonusTimer = 0;
+  double transformBonusAtkMul = 1.0;
+  double transformBonusSpeedMul = 1.0;
+  double transformBonusFireRateMul = 1.0;
+
   Player()
       : super(
           size: Vector2(playerWidth, playerHeight),
           anchor: Anchor.center,
         );
+
+  int get effectiveAtk =>
+      (atk * currentForm.atkMultiplier * awakenedAtkMultiplier * transformBonusAtkMul).round();
+
+  double get effectiveSpeed =>
+      playerMoveSpeed *
+      speedMultiplier *
+      currentForm.speedMultiplier *
+      awakenedSpeedMultiplier *
+      transformBonusSpeedMul;
+
+  double get effectiveFireInterval =>
+      playerFireInterval /
+      (currentForm.fireRateMultiplier * awakenedFireRateMultiplier * transformBonusFireRateMul);
+
+  BulletType get activeBulletType =>
+      isAwakened ? BulletType.normal : currentForm.bulletType;
+
+  Color get activeBulletColor =>
+      isAwakened ? const Color(0xFFFFEA00) : currentForm.bulletColor;
 
   Rect get hitbox {
     final cx = position.x;
@@ -44,18 +81,27 @@ class Player extends PositionComponent with HasGameReference<GRunnerGame> {
   void update(double dt) {
     super.update(dt);
 
+    // Transform bonus countdown
+    if (transformBonusTimer > 0) {
+      transformBonusTimer -= dt;
+      if (transformBonusTimer <= 0) {
+        transformBonusAtkMul = 1.0;
+        transformBonusSpeedMul = 1.0;
+        transformBonusFireRateMul = 1.0;
+      }
+    }
+
     // Tap-to-move: smooth slide toward target
     if (targetX != null && targetY != null) {
       final dx = targetX! - position.x;
       final dy = targetY! - position.y;
       final dist = (dx * dx + dy * dy);
       if (dist < 4) {
-        // close enough
         targetX = null;
         targetY = null;
       } else {
-        final d = dist > 0 ? dist.sqrt() : 1;
-        final speed = playerMoveSpeed * speedMultiplier;
+        final d = dist > 0 ? _sqrt(dist) : 1;
+        final speed = effectiveSpeed;
         final move = speed * dt;
         if (move >= d) {
           position.x = targetX!;
@@ -92,19 +138,28 @@ class Player extends PositionComponent with HasGameReference<GRunnerGame> {
     // Auto-fire
     fireTimer -= dt;
     if (fireTimer <= 0) {
-      fireTimer = playerFireInterval;
+      fireTimer = effectiveFireInterval;
       game.spawnPlayerBullet(position.x, position.y - playerHeight / 2);
     }
   }
 
   void takeDamage(int damage) {
-    if (isInvincible) return;
-    hp -= damage;
+    if (isInvincible || isAwakenedInvincible) return;
+    final reducedDamage = (damage * defMultiplier).round();
+    hp -= reducedDamage;
     if (hp < 0) hp = 0;
     isInvincible = true;
     invincibleTimer = iframeDuration;
     _blinkTimer = iframeBlinkInterval;
     _blinkVisible = true;
+  }
+
+  void applyTransformBonus() {
+    transformBonusTimer = transformBonusDuration;
+    transformBonusAtkMul = transformBonusAtkMultiplier;
+    transformBonusSpeedMul = transformBonusSpeedMultiplier;
+    transformBonusFireRateMul = transformBonusFireRateMultiplier;
+    hp = (hp + transformBonusHpHeal).clamp(0, maxHp);
   }
 
   @override
@@ -115,6 +170,38 @@ class Player extends PositionComponent with HasGameReference<GRunnerGame> {
     final h = size.y;
     final cx = w / 2;
 
+    // Awakening glow aura
+    if (isAwakened) {
+      final auraPath = Path()
+        ..addOval(Rect.fromCenter(
+          center: Offset(cx, h / 2),
+          width: w * 1.4,
+          height: h * 1.4,
+        ));
+      canvas.drawPath(
+        auraPath,
+        Paint()
+          ..color = const Color(0x33FFEA00)
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 10),
+      );
+    }
+
+    // Transform bonus glow
+    if (transformBonusTimer > 0 && !isAwakened) {
+      final auraPath = Path()
+        ..addOval(Rect.fromCenter(
+          center: Offset(cx, h / 2),
+          width: w * 1.2,
+          height: h * 1.2,
+        ));
+      canvas.drawPath(
+        auraPath,
+        Paint()
+          ..color = const Color(0x2244FFAA)
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8),
+      );
+    }
+
     // Ship body (triangle/arrow shape)
     final bodyPath = Path()
       ..moveTo(cx, 0) // nose
@@ -123,18 +210,25 @@ class Player extends PositionComponent with HasGameReference<GRunnerGame> {
       ..lineTo(0, h * 0.8)
       ..close();
 
+    final Color bodyColor;
+    if (isAwakened) {
+      bodyColor = const Color(0xFFFFEA00); // Gold during awakening
+    } else {
+      bodyColor = currentForm.bulletColor; // Form color
+    }
+
     // Glow
     canvas.drawPath(
       bodyPath,
       Paint()
-        ..color = const Color(0x3300CCFF)
+        ..color = bodyColor.withValues(alpha: 0.33)
         ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6),
     );
 
     // Body
     canvas.drawPath(
       bodyPath,
-      Paint()..color = const Color(0xFF00CCFF),
+      Paint()..color = bodyColor,
     );
 
     // Cockpit accent
@@ -149,13 +243,10 @@ class Player extends PositionComponent with HasGameReference<GRunnerGame> {
       Paint()..color = const Color(0xFFFFFFFF),
     );
   }
-}
 
-extension on double {
-  double sqrt() {
-    if (this <= 0) return 0;
-    // Use dart:math through a simple approach
-    double x = this;
+  static double _sqrt(double value) {
+    if (value <= 0) return 0;
+    double x = value;
     double y = x / 2;
     for (int i = 0; i < 10; i++) {
       y = (y + x / y) / 2;
