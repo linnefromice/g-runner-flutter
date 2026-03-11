@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../components/boss.dart';
 import '../data/constants.dart';
+import '../data/form_skills.dart';
 import '../g_runner_game.dart';
 
 /// HUD overlay displaying HP, score, combo, awakening, and EX gauge
@@ -72,6 +73,9 @@ class _HudOverlayState extends State<HudOverlay> {
             const SizedBox(height: 4),
             // Form + Transform row
             _buildFormTransformRow(game),
+            const SizedBox(height: 4),
+            // Form XP + Graze row
+            _buildFormXpGrazeRow(game),
             // Awakening timer (shown only when awakened)
             if (game.isAwakened) ...[
               const SizedBox(height: 4),
@@ -456,6 +460,74 @@ class _HudOverlayState extends State<HudOverlay> {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildFormXpGrazeRow(GRunnerGame game) {
+    final currentLevel = formLevelFromXp(game.formXpEarned);
+    final nextLevelXp = xpForNextLevel(currentLevel);
+    final xpProgress = currentLevel >= 3
+        ? 1.0
+        : (game.formXpEarned / nextLevelXp).clamp(0.0, 1.0);
+
+    return Row(
+      children: [
+        // Form XP bar
+        Expanded(
+          child: Row(
+            children: [
+              Text(
+                'Lv$currentLevel',
+                style: const TextStyle(
+                  color: Color(0xFFAADDFF),
+                  fontSize: 9,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(width: 4),
+              Expanded(
+                child: Container(
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF1A1A2E),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                  child: FractionallySizedBox(
+                    widthFactor: xpProgress,
+                    alignment: Alignment.centerLeft,
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF44AAFF),
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 4),
+              Text(
+                currentLevel >= 3 ? 'MAX' : '${game.formXpEarned}/$nextLevelXp',
+                style: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.5),
+                  fontSize: 8,
+                  fontFeatures: const [FontFeature.tabularFigures()],
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(width: 12),
+        // Graze counter
+        if (game.grazeCount > 0)
+          Text(
+            'GRAZE ${game.grazeCount}',
+            style: const TextStyle(
+              color: Color(0xFFFFDD44),
+              fontSize: 9,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+      ],
     );
   }
 
