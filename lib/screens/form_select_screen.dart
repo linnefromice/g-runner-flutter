@@ -6,9 +6,10 @@ import '../game/data/stage_data.dart';
 import 'game_screen.dart';
 
 class FormSelectScreen extends StatefulWidget {
-  final StageData stageData;
+  final StageData? stageData;
+  final bool isEndless;
 
-  const FormSelectScreen({super.key, required this.stageData});
+  const FormSelectScreen({super.key, this.stageData, this.isEndless = false});
 
   @override
   State<FormSelectScreen> createState() => _FormSelectScreenState();
@@ -104,6 +105,7 @@ class _FormSelectScreenState extends State<FormSelectScreen> {
                           stageData: widget.stageData,
                           primaryForm: _primary,
                           secondaryForm: _secondary,
+                          isEndless: widget.isEndless,
                         ),
                       ),
                     );
