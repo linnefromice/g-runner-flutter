@@ -1,6 +1,6 @@
 // Stage timeline definitions
 
-enum SpawnEventType { enemy, gate, boss }
+enum SpawnEventType { enemy, gate, boss, debris, boostLaneStart, boostLaneEnd }
 
 enum EnemyType {
   stationary, patrol, rush, swarm, phalanx,
@@ -48,7 +48,8 @@ class SpawnEvent {
   })  : type = SpawnEventType.enemy,
         leftEffect = null,
         rightEffect = null,
-        bossIndex = 1;
+        bossIndex = 1,
+        boostLaneWidth = null;
 
   const SpawnEvent.gate({
     required this.time,
@@ -57,7 +58,8 @@ class SpawnEvent {
   })  : type = SpawnEventType.gate,
         enemyType = null,
         x = null,
-        bossIndex = 1;
+        bossIndex = 1,
+        boostLaneWidth = null;
 
   // Boss spawn fields
   final int bossIndex;
@@ -69,7 +71,42 @@ class SpawnEvent {
         enemyType = null,
         x = null,
         leftEffect = null,
-        rightEffect = null;
+        rightEffect = null,
+        boostLaneWidth = null;
+
+  // Debris spawn fields
+  const SpawnEvent.debris({
+    required this.time,
+    required double this.x,
+  })  : type = SpawnEventType.debris,
+        enemyType = null,
+        leftEffect = null,
+        rightEffect = null,
+        bossIndex = 1,
+        boostLaneWidth = null;
+
+  // Boost Lane fields
+  final double? boostLaneWidth;
+
+  const SpawnEvent.boostLaneStart({
+    required this.time,
+    required double this.x,
+    required double this.boostLaneWidth,
+  })  : type = SpawnEventType.boostLaneStart,
+        enemyType = null,
+        leftEffect = null,
+        rightEffect = null,
+        bossIndex = 1;
+
+  const SpawnEvent.boostLaneEnd({
+    required this.time,
+  })  : type = SpawnEventType.boostLaneEnd,
+        enemyType = null,
+        x = null,
+        leftEffect = null,
+        rightEffect = null,
+        bossIndex = 1,
+        boostLaneWidth = null;
 }
 
 class StageData {

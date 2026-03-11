@@ -5,8 +5,10 @@ import 'package:flame/components.dart';
 import 'package:flame/game.dart';
 
 import 'components/background.dart';
+import 'components/boost_lane.dart';
 import 'components/boss.dart';
 import 'components/bullet.dart';
+import 'components/debris.dart';
 import 'components/enemy.dart';
 import 'components/ex_burst.dart';
 import 'components/gate.dart';
@@ -15,12 +17,15 @@ import 'components/player.dart';
 import 'components/score_popup.dart';
 import 'data/constants.dart';
 import 'data/difficulty.dart';
+import 'data/endless_data.dart';
+import 'data/form_skills.dart';
 import 'data/stage_data.dart';
 
 enum GameState { playing, paused, gameOver, stageClear }
 
 class GRunnerGame extends FlameGame {
-  final StageData stageData;
+  StageData stageData;
+  final bool isEndless;
 
   late Player player;
   late Background background;
@@ -32,6 +37,12 @@ class GRunnerGame extends FlameGame {
 
   // Callback for game end (navigates to result screen)
   void Function(GameState state, int score)? onGameEnd;
+
+  // Endless mode
+  int endlessWave = 0;
+  final math.Random _endlessRng = math.Random();
+  BoostLane? _activeBoostLane;
+  bool isInBoostLane = false;
 
   // Screen shake
   double _shakeIntensity = 0;
@@ -55,6 +66,8 @@ class GRunnerGame extends FlameGame {
   FormType secondaryForm = FormType.heavyArtillery;
   bool _isOnPrimaryForm = true;
 
+  FormType get currentFormType => _isOnPrimaryForm ? primaryForm : secondaryForm;
+
   // Boss
   Boss? currentBoss;
   bool isBossPhase = false;
@@ -68,20 +81,43 @@ class GRunnerGame extends FlameGame {
   // Credits earned during this session
   int creditsEarned = 0;
 
+  // Bonus tracking
+  int damageTaken = 0;
+  int awakenedCount = 0;
+  int enemiesSpawned = 0;
+  int enemiesKilled = 0;
+
+  // Form XP earned this session
+  int formXpEarned = 0;
+
+  // Graze tracking
+  int grazeCount = 0;
+
+  // Parry (Just Transform)
+  double parryTimer = 0; // remaining parry window time
+
   // Difficulty scaling
   late final DifficultyParams difficulty;
 
   double get logicalHeight => logicalWidth * (size.y / size.x);
 
   double get currentScrollSpeed {
-    final base = baseScrollSpeed * difficulty.scrollSpeedMultiplier;
-    return isBossPhase ? base * bossScrollSpeedMultiplier : base;
+    double base;
+    if (isEndless) {
+      final endlessDiff = getEndlessDifficulty(stageTime);
+      base = baseScrollSpeed * endlessDiff.scrollSpeedMultiplier;
+    } else {
+      base = baseScrollSpeed * difficulty.scrollSpeedMultiplier;
+    }
+    if (isBossPhase) base *= bossScrollSpeedMultiplier;
+    if (isInBoostLane) base *= boostLaneScrollMultiplier;
+    return base;
   }
 
   double get _scale => size.x / logicalWidth;
 
-  GRunnerGame({required this.stageData}) {
-    difficulty = getDifficultyForStage(stageData.id);
+  GRunnerGame({required this.stageData, this.isEndless = false}) {
+    difficulty = getDifficultyForStage(isEndless ? 1 : stageData.id);
   }
 
   @override
@@ -122,11 +158,31 @@ class GRunnerGame extends FlameGame {
     _updateScreenShake(effectiveDt);
     _updateAwakening(effectiveDt);
     _updateTransformGauge(effectiveDt);
+    if (parryTimer > 0) {
+      parryTimer -= dt; // real time, not slowed
+    }
 
     _processSpawnEvents();
     _checkCollisions();
     _checkContactDamage();
     _checkGateCollisions();
+    _checkDebrisCollisions();
+    _updateBoostLane();
+
+    // Endless: generate next wave
+    if (isEndless) {
+      final nextWaveTime = (endlessWave + 1) * endlessWaveDuration;
+      if (stageTime >= nextWaveTime) {
+        endlessWave++;
+        final newEvents = generateEndlessWave(endlessWave, _endlessRng);
+        stageData = StageData(
+          id: 0,
+          name: 'Endless',
+          duration: double.infinity,
+          timeline: [...stageData.timeline, ...newEvents],
+        );
+      }
+    }
 
     if (player.hp <= 0) {
       state = GameState.gameOver;
@@ -134,7 +190,7 @@ class GRunnerGame extends FlameGame {
     }
 
     // Stage clear: boss stages clear on boss defeat, normal stages clear when time + enemies done
-    if (!stageData.hasBoss && stageTime >= stageData.duration) {
+    if (!isEndless && !stageData.hasBoss && stageTime >= stageData.duration) {
       final enemies = world.children.whereType<Enemy>();
       if (enemies.isEmpty) {
         creditsEarned += creditPerStageClear;
@@ -160,6 +216,7 @@ class GRunnerGame extends FlameGame {
   void _activateAwakening() {
     isAwakened = true;
     awakenedTimer = awakenedDuration;
+    awakenedCount++;
     comboCount = 0;
 
     // Slow motion effect
@@ -310,6 +367,8 @@ class GRunnerGame extends FlameGame {
     final newFormType = _isOnPrimaryForm ? primaryForm : secondaryForm;
     player.currentForm = _formDefinitionFor(newFormType);
     player.applyTransformBonus();
+    // Start parry window
+    parryTimer = parryWindow;
   }
 
   void handleTransformTap() {
@@ -354,6 +413,7 @@ class GRunnerGame extends FlameGame {
       switch (event.type) {
         case SpawnEventType.enemy:
           if (!isBossPhase) {
+            enemiesSpawned++;
             world.add(Enemy(
               type: event.enemyType!,
               position: Vector2(event.x!, -20),
@@ -381,9 +441,95 @@ class GRunnerGame extends FlameGame {
           final boss = Boss(bossIndex: event.bossIndex);
           currentBoss = boss;
           world.add(boss);
+        case SpawnEventType.debris:
+          if (!isBossPhase) {
+            world.add(Debris(position: Vector2(event.x!, -debrisHeight)));
+          }
+        case SpawnEventType.boostLaneStart:
+          if (!isBossPhase) {
+            _removeBoostLane();
+            final lane = BoostLane(
+              laneX: event.x!,
+              laneWidth: event.boostLaneWidth!,
+            );
+            _activeBoostLane = lane;
+            world.add(lane);
+          }
+        case SpawnEventType.boostLaneEnd:
+          _removeBoostLane();
       }
       _spawnIndex++;
     }
+  }
+
+  void _removeBoostLane() {
+    if (_activeBoostLane != null && _activeBoostLane!.isMounted) {
+      _activeBoostLane!.removeFromParent();
+    }
+    _activeBoostLane = null;
+    isInBoostLane = false;
+  }
+
+  void _updateBoostLane() {
+    if (_activeBoostLane != null && _activeBoostLane!.isMounted) {
+      isInBoostLane = _activeBoostLane!.containsPlayer();
+    } else {
+      isInBoostLane = false;
+    }
+  }
+
+  void _checkDebrisCollisions() {
+    final debrisList = world.children.whereType<Debris>().toList();
+    final playerBullets = world.children.whereType<PlayerBullet>().toList();
+    final playerHitbox = player.hitbox;
+
+    for (final debris in debrisList) {
+      if (!debris.isMounted) continue;
+      final debrisRect = Rect.fromCenter(
+        center: Offset(debris.position.x, debris.position.y),
+        width: debris.size.x,
+        height: debris.size.y,
+      );
+
+      // Player collision (contact damage)
+      if (debrisRect.overlaps(playerHitbox)) {
+        if (!player.isInvincible && !player.isAwakenedInvincible) {
+          triggerShake(shakePlayerHitIntensity, shakePlayerHitDuration);
+          player.takeDamage(debrisContactDamage);
+          damageTaken += debrisContactDamage;
+          resetCombo();
+        }
+      }
+
+      // Bullet collision
+      for (final bullet in playerBullets) {
+        if (!bullet.isMounted) continue;
+        final bulletRect = Rect.fromCenter(
+          center: Offset(bullet.position.x, bullet.position.y),
+          width: bullet.size.x,
+          height: bullet.size.y,
+        );
+        if (bulletRect.overlaps(debrisRect)) {
+          debris.takeDamage(bullet.damage);
+          if (!bullet.isPierce) {
+            bullet.removeFromParent();
+          }
+          break;
+        }
+      }
+    }
+  }
+
+  void onDebrisDestroyed(Debris debris) {
+    score += debrisDestroyScore;
+    creditsEarned += debrisDestroyCredit;
+    _spawnScorePopup(debrisDestroyScore, debris.position.x, debris.position.y);
+    spawnKillParticles(
+      (p) => world.add(p),
+      debris.position.x,
+      debris.position.y,
+      const Color(0xFF8899AA),
+    );
   }
 
   // --- Collision Detection ---
@@ -503,6 +649,13 @@ class GRunnerGame extends FlameGame {
     }
 
     final playerHitbox = player.hitbox;
+    // Visual hitbox for graze detection (player visual size)
+    final playerVisualRect = Rect.fromCenter(
+      center: Offset(player.position.x, player.position.y),
+      width: playerWidth,
+      height: playerHeight,
+    );
+
     for (final bullet in enemyBullets) {
       if (!bullet.isMounted) continue;
       final bulletRect = Rect.fromCenter(
@@ -510,15 +663,110 @@ class GRunnerGame extends FlameGame {
         width: bullet.size.x,
         height: bullet.size.y,
       );
+
       if (bulletRect.overlaps(playerHitbox)) {
+        // Direct hit — check for parry first
+        if (parryTimer > 0) {
+          _applyParryShockwave(bullet.position.x, bullet.position.y);
+          bullet.removeFromParent();
+          continue;
+        }
         if (!player.isInvincible && !player.isAwakenedInvincible) {
           triggerShake(shakePlayerHitIntensity, shakePlayerHitDuration);
           player.takeDamage(bullet.damage);
+          damageTaken += bullet.damage;
           resetCombo();
         }
         bullet.removeFromParent();
+      } else if (!bullet.grazed &&
+          !player.isInvincible &&
+          !player.isAwakenedInvincible &&
+          bulletRect.overlaps(playerVisualRect)) {
+        // Graze: bullet overlaps visual rect but not actual hitbox
+        bullet.grazed = true;
+        _applyGraze(bullet);
       }
     }
+  }
+
+  void _applyGraze(EnemyBullet bullet) {
+    // Calculate graze tier based on distance
+    final dx = bullet.position.x - player.position.x;
+    final dy = bullet.position.y - player.position.y;
+    final dist = math.sqrt(dx * dx + dy * dy);
+    final halfHitbox = playerHitboxSize / 2;
+
+    int grazeScore;
+    double exGain;
+    double tfGain;
+    int xpGain;
+
+    if (dist <= halfHitbox + grazeExtremeExpand) {
+      // Extreme graze
+      grazeScore = grazeExtremeScore;
+      exGain = grazeExtremeExGain;
+      tfGain = grazeExtremeTfGain;
+      xpGain = xpPerGrazeExtreme;
+    } else if (dist <= halfHitbox + grazeCloseExpand) {
+      // Close graze
+      grazeScore = grazeCloseScore;
+      exGain = grazeCloseExGain;
+      tfGain = grazeCloseTfGain;
+      xpGain = xpPerGrazeClose;
+    } else {
+      // Normal graze
+      grazeScore = grazeNormalScore;
+      exGain = grazeNormalExGain;
+      tfGain = grazeNormalTfGain;
+      xpGain = xpPerGrazeNormal;
+    }
+
+    score += grazeScore;
+    addExGauge(exGain);
+    addTransformGauge(tfGain);
+    formXpEarned += xpGain;
+    grazeCount++;
+
+    _spawnScorePopup(grazeScore, bullet.position.x, bullet.position.y);
+  }
+
+  void _applyParryShockwave(double x, double y) {
+    parryTimer = 0;
+    score += parryScore;
+    addExGauge(parryExGain);
+    triggerShake(4.0, 0.15);
+    _spawnScorePopup(parryScore, x, y);
+
+    // Damage all enemies in radius
+    final enemies = world.children.whereType<Enemy>().toList();
+    for (final enemy in enemies) {
+      if (!enemy.isMounted) continue;
+      final dx = enemy.position.x - x;
+      final dy = enemy.position.y - y;
+      final dist = dx * dx + dy * dy;
+      if (dist <= parryShockwaveRadius * parryShockwaveRadius) {
+        enemy.takeDamage(parryShockwaveDamage);
+      }
+    }
+
+    // Destroy enemy bullets in radius
+    final bullets = world.children.whereType<EnemyBullet>().toList();
+    for (final bullet in bullets) {
+      if (!bullet.isMounted) continue;
+      final dx = bullet.position.x - x;
+      final dy = bullet.position.y - y;
+      final dist = dx * dx + dy * dy;
+      if (dist <= parryShockwaveRadius * parryShockwaveRadius) {
+        bullet.removeFromParent();
+      }
+    }
+
+    // Shockwave particles
+    spawnKillParticles(
+      (p) => world.add(p),
+      x, y,
+      const Color(0xFFFFFFFF),
+    );
   }
 
   void _applyExplosionDamage(double x, double y, int damage) {
@@ -558,6 +806,7 @@ class GRunnerGame extends FlameGame {
         if (!player.isInvincible && !player.isAwakenedInvincible) {
           triggerShake(shakePlayerHitIntensity, shakePlayerHitDuration);
           player.takeDamage(enemy.atk);
+          damageTaken += enemy.atk;
           resetCombo();
         }
         // Kill the enemy on contact
@@ -598,6 +847,9 @@ class GRunnerGame extends FlameGame {
 
         // Transform gauge
         addTransformGauge(transformGainOnGatePass);
+
+        // Form XP
+        formXpEarned += xpPerGatePass;
       }
     }
   }
@@ -661,6 +913,16 @@ class GRunnerGame extends FlameGame {
     ));
   }
 
+  void spawnEnemyBulletHoming(double x, double y, int damage, {double? speedX, double? speedY}) {
+    world.add(EnemyBullet(
+      damage: damage,
+      position: Vector2(x, y),
+      speedX: speedX ?? 0,
+      speedY: speedY ?? enemyBulletSpeed,
+      isHoming: true,
+    ));
+  }
+
   int _scoreForEnemy(EnemyType type) {
     switch (type) {
       case EnemyType.rush:
@@ -714,7 +976,11 @@ class GRunnerGame extends FlameGame {
   }
 
   void onEnemyKilled(Enemy enemy) {
-    final killScore = _scoreForEnemy(enemy.type);
+    enemiesKilled++;
+    int killScore = _scoreForEnemy(enemy.type);
+    if (isInBoostLane) {
+      killScore = (killScore * boostLaneScoreMultiplier).toInt();
+    }
     score += killScore;
     creditsEarned += _creditForEnemy(enemy.type);
     spawnKillParticles(
@@ -731,6 +997,13 @@ class GRunnerGame extends FlameGame {
 
     // Transform gauge
     addTransformGauge(transformGainOnEnemyKill);
+
+    // Form XP
+    final isStrong = enemy.type == EnemyType.phalanx ||
+        enemy.type == EnemyType.juggernaut ||
+        enemy.type == EnemyType.sentinel ||
+        enemy.type == EnemyType.carrier;
+    formXpEarned += isStrong ? xpPerStrongEnemyKill : xpPerEnemyKill;
 
     // Splitter: spawn swarms on death
     if (enemy.type == EnemyType.splitter) {

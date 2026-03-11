@@ -151,7 +151,7 @@ class FormDefinition {
   });
 }
 
-enum BulletType { normal, explosion, pierce, shieldPierce, scatter }
+enum BulletType { normal, explosion, pierce, shieldPierce, scatter, homing }
 
 const formStandard = FormDefinition(
   type: FormType.standard,
@@ -324,6 +324,73 @@ const int atkUpgradeCostBase = 100;
 const int hpUpgradeCostBase = 100;
 const int speedUpgradeCostBase = 100;
 const int defUpgradeCostBase = 150;
+
+// Graze (near-miss detection)
+const double grazeExtremeExpand = 1; // pixels beyond actual hitbox
+const double grazeCloseExpand = 4; // pixels beyond actual hitbox
+const double grazeExpandPassiveBonus = 4; // extra pixels from graze_expand passive
+
+// Graze rewards
+const int grazeNormalScore = 20;
+const double grazeNormalExGain = 3;
+const double grazeNormalTfGain = 2;
+const int grazeCloseScore = 50;
+const double grazeCloseExGain = 6;
+const double grazeCloseTfGain = 4;
+const int grazeExtremeScore = 150;
+const double grazeExtremeExGain = 12;
+const double grazeExtremeTfGain = 8;
+
+// Parry / Just Transform
+const double parryWindow = 0.2; // 200ms window after transform
+const double parryShockwaveRadius = 60;
+const int parryShockwaveDamage = 30;
+const int parryScore = 300;
+const double parryExGain = 15;
+const double parryShockwaveDuration = 0.2; // visual effect duration
+
+// Passive skill constants
+const double armorDamageReduction = 0.8; // 20% less damage
+const double hpRegenPerSecond = 1.0; // HP per second
+const double criticalChancePercent = 0.15; // 15%
+const double criticalDamageMultiplier = 2.0;
+const double shieldRegenCooldown = 15.0; // seconds
+const int counterShotBulletCount = 8; // bullets in all directions
+const double slowOnHitDuration = 2.0; // seconds
+const double slowOnHitFactor = 0.5; // 50% speed
+
+// Boss 3 homing
+const int bossHomingCount = 2; // outer bullets of spread become homing
+const double bossHomingTurnSpeed = 2.0; // radians/sec
+const double bossHomingBulletSpeed = 150; // slower than normal spread
+
+// Debris
+const int debrisHp = 50;
+const double debrisWidth = 40;
+const double debrisHeight = 40;
+const int debrisContactDamage = 20;
+const int debrisDestroyScore = 50;
+const int debrisDestroyCredit = 1;
+
+// Boost Lane
+const double boostLaneScoreMultiplier = 1.5;
+const double boostLaneScrollMultiplier = 1.3;
+
+// Credit Boost upgrade
+const int maxCreditBoostLevel = 5;
+const double creditBoostPerLevel = 0.1; // +10% per level
+const int creditBoostCostBase = 200;
+
+// Endless mode
+const double endlessWaveDuration = 30.0; // seconds per wave
+const int endlessBaseEnemyCount = 3;
+const int endlessMaxEnemyTypes = 11;
+const double endlessScrollSpeedPerMinute = 0.1;
+const double endlessHpPerMinute = 0.3;
+const double endlessAtkPerMinute = 0.15;
+const int endlessBaseMaxConcurrent = 6;
+const double endlessMaxConcurrentPerMinute = 2.0;
+const double endlessSurvivorTime = 300.0; // 5 minutes for achievement
 
 // Screen shake
 const double shakePlayerHitIntensity = 1.5;

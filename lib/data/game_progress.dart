@@ -37,12 +37,44 @@ class GameProgress {
   List<String> unlockedForms;
   UpgradeLevels upgrades;
 
+  // Form XP and skill tree
+  Map<String, int> formXp; // formType.name → cumulative XP
+  Map<String, List<String>> formSkills; // formType.name → list of selected skill IDs
+
+  // Achievements
+  List<String> unlockedAchievements;
+  List<String> claimedAchievements;
+  int totalCreditsEarned;
+
+  // Endless mode
+  int endlessBestScore;
+  double endlessBestTime;
+
+  // Credit Boost
+  int creditBoostLevel;
+
+  // Settings
+  double bgmVolume;
+  double seVolume;
+  String language; // 'system', 'en', 'ja'
+
   GameProgress._({
     required this.unlockedStages,
     required this.highScores,
     required this.credits,
     required this.unlockedForms,
     required this.upgrades,
+    required this.formXp,
+    required this.formSkills,
+    required this.unlockedAchievements,
+    required this.claimedAchievements,
+    required this.totalCreditsEarned,
+    required this.endlessBestScore,
+    required this.endlessBestTime,
+    required this.creditBoostLevel,
+    required this.bgmVolume,
+    required this.seVolume,
+    required this.language,
   });
 
   static Future<void> load() async {
@@ -62,6 +94,25 @@ class GameProgress {
         upgrades: data['upgrades'] != null
             ? UpgradeLevels.fromJson(data['upgrades'] as Map<String, dynamic>)
             : UpgradeLevels(),
+        formXp: (data['formXp'] as Map<String, dynamic>?)?.map(
+              (k, v) => MapEntry(k, v as int),
+            ) ??
+            {},
+        formSkills: (data['formSkills'] as Map<String, dynamic>?)?.map(
+              (k, v) => MapEntry(k, (v as List).cast<String>()),
+            ) ??
+            {},
+        unlockedAchievements:
+            (data['unlockedAchievements'] as List?)?.cast<String>() ?? [],
+        claimedAchievements:
+            (data['claimedAchievements'] as List?)?.cast<String>() ?? [],
+        totalCreditsEarned: data['totalCreditsEarned'] as int? ?? 0,
+        endlessBestScore: data['endlessBestScore'] as int? ?? 0,
+        endlessBestTime: (data['endlessBestTime'] as num?)?.toDouble() ?? 0,
+        creditBoostLevel: data['creditBoostLevel'] as int? ?? 0,
+        bgmVolume: (data['bgmVolume'] as num?)?.toDouble() ?? 0.7,
+        seVolume: (data['seVolume'] as num?)?.toDouble() ?? 1.0,
+        language: data['language'] as String? ?? 'system',
       );
     } else {
       _instance = GameProgress._(
@@ -70,6 +121,17 @@ class GameProgress {
         credits: 0,
         unlockedForms: ['standard', 'heavyArtillery', 'highSpeed'],
         upgrades: UpgradeLevels(),
+        formXp: {},
+        formSkills: {},
+        unlockedAchievements: [],
+        claimedAchievements: [],
+        totalCreditsEarned: 0,
+        endlessBestScore: 0,
+        endlessBestTime: 0,
+        creditBoostLevel: 0,
+        bgmVolume: 0.7,
+        seVolume: 1.0,
+        language: 'system',
       );
     }
   }
@@ -83,6 +145,17 @@ class GameProgress {
       'credits': credits,
       'unlockedForms': unlockedForms,
       'upgrades': upgrades.toJson(),
+      'formXp': formXp,
+      'formSkills': formSkills,
+      'unlockedAchievements': unlockedAchievements,
+      'claimedAchievements': claimedAchievements,
+      'totalCreditsEarned': totalCreditsEarned,
+      'endlessBestScore': endlessBestScore,
+      'endlessBestTime': endlessBestTime,
+      'creditBoostLevel': creditBoostLevel,
+      'bgmVolume': bgmVolume,
+      'seVolume': seVolume,
+      'language': language,
     };
     await prefs.setString('game_progress', jsonEncode(data));
   }
@@ -91,7 +164,7 @@ class GameProgress {
 
   void unlockNextStage(int clearedStageId) {
     final next = clearedStageId + 1;
-    if (next <= 10 && !unlockedStages.contains(next)) {
+    if (next <= 15 && !unlockedStages.contains(next)) {
       unlockedStages.add(next);
     }
   }
@@ -113,6 +186,18 @@ class GameProgress {
     if (!unlockedForms.contains(key)) {
       unlockedForms.add(key);
     }
+  }
+
+  int getFormXp(String formKey) => formXp[formKey] ?? 0;
+
+  void addFormXp(String formKey, int amount) {
+    formXp[formKey] = (formXp[formKey] ?? 0) + amount;
+  }
+
+  List<String> getFormSkills(String formKey) => formSkills[formKey] ?? [];
+
+  void selectFormSkill(String formKey, String skillId) {
+    formSkills[formKey] = [...getFormSkills(formKey), skillId];
   }
 
   void updateHighScore(int stageId, int score) {
@@ -198,4 +283,40 @@ class GameProgress {
   int get bonusHp => upgrades.hp * hpUpgradePerLevel;
   double get bonusSpeedMultiplier => 1.0 + upgrades.speed * speedUpgradePerLevel;
   double get bonusDefMultiplier => 1.0 - upgrades.def * defUpgradePerLevel;
+
+  // Credit Boost
+  double get creditBoostMultiplier => 1.0 + creditBoostLevel * creditBoostPerLevel;
+
+  int creditBoostCost() => creditBoostCostBase * (creditBoostLevel + 1);
+
+  bool canUpgradeCreditBoost() =>
+      creditBoostLevel < maxCreditBoostLevel && credits >= creditBoostCost();
+
+  void purchaseCreditBoost() {
+    if (!canUpgradeCreditBoost()) return;
+    credits -= creditBoostCost();
+    creditBoostLevel++;
+  }
+
+  // Achievement helpers
+  void unlockAchievement(String id) {
+    if (!unlockedAchievements.contains(id)) {
+      unlockedAchievements.add(id);
+    }
+  }
+
+  bool isAchievementClaimed(String id) => claimedAchievements.contains(id);
+
+  void claimAchievement(String id, int reward) {
+    if (!claimedAchievements.contains(id)) {
+      claimedAchievements.add(id);
+      credits += reward;
+    }
+  }
+
+  // Endless mode helpers
+  void updateEndlessBest(int score, double time) {
+    if (score > endlessBestScore) endlessBestScore = score;
+    if (time > endlessBestTime) endlessBestTime = time;
+  }
 }

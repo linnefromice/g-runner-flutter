@@ -71,31 +71,52 @@ class _UpgradeShopScreenState extends State<UpgradeShopScreen> {
             ),
             // Upgrade list
             Expanded(
-              child: ListView.builder(
+              child: ListView(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
-                itemCount: _stats.length,
-                itemBuilder: (context, index) {
-                  final stat = _stats[index];
-                  final level = _levelFor(stat.key, progress);
-                  final cost = progress.upgradeCost(stat.key);
-                  final canBuy = progress.canUpgrade(stat.key);
-                  final isMax = level >= stat.maxLevel;
+                children: [
+                  ..._stats.map((stat) {
+                    final level = _levelFor(stat.key, progress);
+                    final cost = progress.upgradeCost(stat.key);
+                    final canBuy = progress.canUpgrade(stat.key);
+                    final isMax = level >= stat.maxLevel;
 
-                  return _UpgradeCard(
-                    stat: stat,
-                    level: level,
-                    cost: cost,
-                    canBuy: canBuy,
-                    isMax: isMax,
-                    onBuy: canBuy
+                    return _UpgradeCard(
+                      stat: stat,
+                      level: level,
+                      cost: cost,
+                      canBuy: canBuy,
+                      isMax: isMax,
+                      onBuy: canBuy
+                          ? () {
+                              progress.purchaseUpgrade(stat.key);
+                              progress.save();
+                              setState(() {});
+                            }
+                          : null,
+                    );
+                  }),
+                  // Credit Boost
+                  _UpgradeCard(
+                    stat: _StatInfo(
+                      'creditBoost',
+                      'CREDIT BOOST',
+                      '+${(creditBoostPerLevel * 100).toInt()}% credits per level',
+                      maxCreditBoostLevel,
+                      const Color(0xFFFFD600),
+                    ),
+                    level: progress.creditBoostLevel,
+                    cost: progress.creditBoostCost(),
+                    canBuy: progress.canUpgradeCreditBoost(),
+                    isMax: progress.creditBoostLevel >= maxCreditBoostLevel,
+                    onBuy: progress.canUpgradeCreditBoost()
                         ? () {
-                            progress.purchaseUpgrade(stat.key);
+                            progress.purchaseCreditBoost();
                             progress.save();
                             setState(() {});
                           }
                         : null,
-                  );
-                },
+                  ),
+                ],
               ),
             ),
           ],
