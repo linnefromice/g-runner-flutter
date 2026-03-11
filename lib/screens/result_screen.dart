@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../game/data/bonuses.dart';
 import 'stage_select_screen.dart';
 import 'title_screen.dart';
 import 'upgrade_shop_screen.dart';
@@ -9,6 +10,7 @@ class ResultScreen extends StatelessWidget {
   final int score;
   final int stageId;
   final int creditsEarned;
+  final List<BonusResult> bonuses;
 
   const ResultScreen({
     super.key,
@@ -16,6 +18,7 @@ class ResultScreen extends StatelessWidget {
     required this.score,
     required this.stageId,
     required this.creditsEarned,
+    this.bonuses = const [],
   });
 
   @override
@@ -77,6 +80,32 @@ class ResultScreen extends StatelessWidget {
                 ),
               ],
             ),
+            // Bonus breakdown
+            if (bonuses.isNotEmpty) ...[
+              const SizedBox(height: 20),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                decoration: BoxDecoration(
+                  border: Border.all(color: const Color(0x44FFFFFF)),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      'BONUS',
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.6),
+                        fontSize: 12,
+                        letterSpacing: 4,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    ...bonuses.map(_buildBonusRow),
+                  ],
+                ),
+              ),
+            ],
             const SizedBox(height: 48),
             _ResultButton(
               label: 'STAGES',
@@ -109,6 +138,58 @@ class ResultScreen extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildBonusRow(BonusResult bonus) {
+    final Color color;
+    switch (bonus.key) {
+      case 'noDamage':
+        color = const Color(0xFF44FF88);
+      case 'fullClear':
+        color = const Color(0xFFFFD600);
+      case 'combo':
+        color = const Color(0xFFFF8844);
+      case 'speedClear':
+        color = const Color(0xFF44DDFF);
+      default:
+        color = Colors.white;
+    }
+
+    String valueText;
+    if (bonus.key == 'noDamage') {
+      valueText = 'Score x1.5  Credit x2.0';
+    } else {
+      valueText = '+${bonus.points} pts';
+    }
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          SizedBox(
+            width: 120,
+            child: Text(
+              bonus.label,
+              style: TextStyle(
+                color: color,
+                fontSize: 13,
+                fontWeight: FontWeight.bold,
+                letterSpacing: 1,
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Text(
+            valueText,
+            style: TextStyle(
+              color: color.withValues(alpha: 0.8),
+              fontSize: 12,
+            ),
+          ),
+        ],
       ),
     );
   }

@@ -43,6 +43,8 @@ class Boss extends PositionComponent with HasGameReference<GRunnerGame> {
 
   double get _phase2Threshold => bossIndex >= 2 ? 0.75 : bossPhase2Threshold;
   double get _phase3Threshold => bossIndex >= 2 ? 0.50 : bossPhase3Threshold;
+  double get _laserWidth => bossIndex >= 3 ? bossLaserWidthBoss3 : bossLaserWidth;
+  bool get _hasHomingBullets => bossIndex >= 3;
 
   double get hpRatio => hp / maxHp;
 
@@ -155,9 +157,10 @@ class Boss extends PositionComponent with HasGameReference<GRunnerGame> {
     final player = game.player;
     if (player.isInvincible || player.isAwakenedInvincible) return;
 
-    final halfWidth = bossLaserWidth / 2;
+    final halfWidth = _laserWidth / 2;
     if ((player.position.x - laserX).abs() <= halfWidth) {
       player.takeDamage(bossLaserDamage);
+      game.damageTaken += bossLaserDamage;
       game.resetCombo();
       game.triggerShake(shakePlayerHitIntensity, shakePlayerHitDuration);
     }
@@ -184,15 +187,31 @@ class Boss extends PositionComponent with HasGameReference<GRunnerGame> {
 
     for (int i = 0; i < bossSpreadCount; i++) {
       final angle = startAngle + i * bossSpreadAngle * math.pi / 180;
-      final vx = math.cos(angle) * _currentBulletSpeed;
-      final vy = math.sin(angle) * _currentBulletSpeed;
-      game.spawnEnemyBullet(
-        position.x,
-        position.y + size.y / 2,
-        bossAtk,
-        speedX: vx,
-        speedY: vy,
-      );
+      // Boss 3: outermost bullets are homing
+      final isOuter = _hasHomingBullets &&
+          (i < bossHomingCount ~/ 2 || i >= bossSpreadCount - bossHomingCount ~/ 2 ||
+           (bossHomingCount == 2 && (i == 0 || i == bossSpreadCount - 1)));
+      if (isOuter) {
+        final vx = math.cos(angle) * bossHomingBulletSpeed;
+        final vy = math.sin(angle) * bossHomingBulletSpeed;
+        game.spawnEnemyBulletHoming(
+          position.x,
+          position.y + size.y / 2,
+          bossAtk,
+          speedX: vx,
+          speedY: vy,
+        );
+      } else {
+        final vx = math.cos(angle) * _currentBulletSpeed;
+        final vy = math.sin(angle) * _currentBulletSpeed;
+        game.spawnEnemyBullet(
+          position.x,
+          position.y + size.y / 2,
+          bossAtk,
+          speedX: vx,
+          speedY: vy,
+        );
+      }
     }
   }
 
@@ -291,7 +310,7 @@ class Boss extends PositionComponent with HasGameReference<GRunnerGame> {
   void _renderLaser(Canvas canvas, double w, double h, double cx) {
     // Laser X is in world coords; convert to boss-local
     final localLaserX = laserX - (position.x - w / 2);
-    final halfWidth = bossLaserWidth / 2;
+    final halfWidth = _laserWidth / 2;
     final beamHeight = game.logicalHeight; // extend to bottom of screen
 
     if (laserState == LaserState.warning) {

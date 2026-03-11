@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'dart:ui';
 
 import 'package:flame/components.dart';
@@ -33,6 +34,7 @@ class PlayerBullet extends PositionComponent with HasGameReference<GRunnerGame> 
         return Vector2(3, 20);
       case BulletType.scatter:
         return Vector2(4, 10);
+      case BulletType.homing:
       case BulletType.normal:
         return Vector2(playerBulletWidth, playerBulletHeight);
     }
@@ -50,6 +52,7 @@ class PlayerBullet extends PositionComponent with HasGameReference<GRunnerGame> 
       BulletType.explosion => playerBulletSpeed * 0.75,
       BulletType.shieldPierce => sniperBulletSpeed,
       BulletType.scatter => playerBulletSpeed * 0.95,
+      BulletType.homing => playerBulletSpeed,
       BulletType.normal => playerBulletSpeed,
     };
 
@@ -85,14 +88,17 @@ class PlayerBullet extends PositionComponent with HasGameReference<GRunnerGame> 
 
 class EnemyBullet extends PositionComponent with HasGameReference<GRunnerGame> {
   final int damage;
-  final double speedX;
-  final double speedY;
+  double speedX;
+  double speedY;
+  final bool isHoming;
+  bool grazed = false;
 
   EnemyBullet({
     required this.damage,
     required Vector2 position,
     this.speedX = 0,
     this.speedY = enemyBulletSpeed,
+    this.isHoming = false,
   }) : super(
           position: position,
           size: Vector2(enemyBulletWidth, enemyBulletHeight),
@@ -102,6 +108,11 @@ class EnemyBullet extends PositionComponent with HasGameReference<GRunnerGame> {
   @override
   void update(double dt) {
     super.update(dt);
+
+    if (isHoming) {
+      _updateHoming(dt);
+    }
+
     position.x += speedX * dt;
     position.y += speedY * dt;
 
@@ -113,23 +124,50 @@ class EnemyBullet extends PositionComponent with HasGameReference<GRunnerGame> {
     }
   }
 
+  void _updateHoming(double dt) {
+    final player = game.player;
+    final dx = player.position.x - position.x;
+    final dy = player.position.y - position.y;
+    final targetAngle = math.atan2(dy, dx);
+
+    final currentAngle = math.atan2(speedY, speedX);
+    var angleDiff = targetAngle - currentAngle;
+    // Normalize to [-pi, pi]
+    while (angleDiff > math.pi) {
+      angleDiff -= 2 * math.pi;
+    }
+    while (angleDiff < -math.pi) {
+      angleDiff += 2 * math.pi;
+    }
+
+    final turn = bossHomingTurnSpeed * dt;
+    final newAngle = currentAngle + angleDiff.clamp(-turn, turn);
+
+    final speed = math.sqrt(speedX * speedX + speedY * speedY);
+    speedX = math.cos(newAngle) * speed;
+    speedY = math.sin(newAngle) * speed;
+  }
+
   @override
   void render(Canvas canvas) {
     final w = size.x;
     final h = size.y;
 
+    final bulletColor = isHoming ? const Color(0xFFFF8800) : const Color(0xFFFF4466);
+    final glowColor = isHoming ? const Color(0x44FF8800) : const Color(0x44FF4444);
+
     // Glow
     canvas.drawOval(
       Rect.fromLTWH(0, 0, w, h),
       Paint()
-        ..color = const Color(0x44FF4444)
+        ..color = glowColor
         ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3),
     );
 
     // Core
     canvas.drawOval(
       Rect.fromLTWH(0, 0, w, h),
-      Paint()..color = const Color(0xFFFF4466),
+      Paint()..color = bulletColor,
     );
   }
 }
