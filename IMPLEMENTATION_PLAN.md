@@ -3,7 +3,7 @@
 > RN版の2.5Dスクロールシューティングゲームを Flutter (Flame) で再現するプロトタイプ
 > RN版参照: `../../g-runner-rn/` (11敵種, 7フォーム, 15ステージ+Endless, 3ボス)
 
-## 現状サマリー (2026-03-11 updated — Phase 0-7 完了, Phase 8-13 計画策定)
+## 現状サマリー (2026-03-11 updated — Phase 0-9 完了, Phase 10-13 計画策定)
 
 ### 完了済み (Phase 0: Core Prototype)
 - [x] Flame ゲームエンジン基盤 (`GRunnerGame`)
@@ -197,53 +197,46 @@
   - 新敵種のスコア/クレジット値追加
   - Splitter 撃破時の Swarm スポーンロジック
 
-### Phase 8: Act 2 (Stage 6-10 + Boss 2)
+### 完了済み (Phase 8: Act 2 — Stage 6-10 + Boss 2) ✅
 > 新敵種を活かした Act 2 ステージ群と Boss 2。
 
-- [ ] **8.1** 難易度スケーリングシステム
-  - ステージ毎にスクロール速度 +6%、スポーン間隔 -6%
-  - 敵 HP +12%/ステージ、敵 ATK +8%/ステージ
-  - 弾速 +5%/ステージ、最大同時敵数 +1/2ステージ (上限7)
-- [ ] **8.2** Stage 6-9 タイムライン (各120秒)
-  - Stage 6: Juggernaut 初登場、Phalanx 組み合わせ
-  - Stage 7: Dodger 初登場、Rush + Dodger の高速 wave
-  - Stage 8: Splitter + Swarm 大群
-  - Stage 9: Summoner + Sentinel コンビ、全敵種混合の高難度
-- [ ] **8.3** Stage 10 タイムライン (240秒, Boss 2)
-  - Boss 2: HP 750 (+50%)、スプレッド + レーザー交互、ドローン 4体
-  - 前半: 高密度 wave (Juggernaut + Sentinel 配置)
-- [ ] **8.4** Boss バリアント対応
-  - Boss クラスに `bossIndex` パラメータ (1-3)
-  - HP = 500 × (1 + 0.5 × (index-1))
-  - ドローン数 = 3 + (index-1)
-  - Boss 2 以降: レーザー攻撃追加
+- [x] **8.1** 難易度スケーリングシステム
+  - DifficultyParams: ステージ ID ベースの動的調整
+  - スクロール速度, 敵HP/ATK, 弾速, 発射間隔をステージごとにスケール
+- [x] **8.2** Stage 6-9 タイムライン
+  - Stage 6 (100s): Scrap Yard — Swarm 大群
+  - Stage 7 (110s): Fortress Gate — Phalanx 壁
+  - Stage 8 (120s): War Front — Juggernaut + Sentinel
+  - Stage 9 (130s): Final Approach — 全敵種 + Carrier
+- [x] **8.3** Stage 10 タイムライン (180秒, Boss 2)
+  - Boss 2: HP 750, ドローン 4, 早期フェーズ遷移
+  - 前半: 高密度 wave (Juggernaut + Sentinel + Dodger)
+- [x] **8.4** Boss バリアント対応
+  - Boss(bossIndex) — HP/ドローン数/フェーズ閾値がスケール
+  - Boss 2: phase2=75%, phase3=50%
 
-### Phase 9: 追加フォーム & Gate 拡張
+### 完了済み (Phase 9: 追加フォーム & Gate 拡張) ✅
 > 戦略の幅を広げるフォームと Gate 種別。
 
-- [ ] **9.1** Sniper フォーム (SPD 0.6x, ATK 2.5x, FR 0.3x)
-  - 特殊能力: シールド貫通 (Phalanx/Sentinel の防御無視)
-  - 長い弾ビジュアル、低速高火力
-- [ ] **9.2** Scatter フォーム (SPD 1.0x, ATK 0.6x, FR 1.0x)
-  - 特殊能力: 5方向同時発射
-  - 広範囲カバー、単体火力低め
-- [ ] **9.3** Guardian フォーム (SPD 0.7x, ATK 0.8x, FR 0.8x)
-  - 特殊能力: 被ダメージ 20%軽減
-  - 防御重視、ボス戦向き
-- [ ] **9.4** フォームアンロック (クレジット購入)
-  - Sniper: Stage 7 クリア + 800 Cr
-  - Scatter: Stage 8 クリア + 800 Cr
-  - Guardian: Stage 10 クリア + 1000 Cr
-  - フォーム選択画面にロック/アンロック表示
-- [ ] **9.5** Refit Gate (フォーム変更)
-  - Gate 通過でフォームを強制変更
-  - 「→ Heavy」「→ Speed」「→ Sniper」「→ Guardian」
-- [ ] **9.6** Growth Gate (累積強化)
-  - ATK +5 (小さいが累積)、SPD +10%
-  - Enhance Gate より控えめだが低リスク
-- [ ] **9.7** Roulette Gate (ランダム)
-  - ATK ±10 (50/50確率)
-  - ハイリスク・ハイリターン
+- [x] **9.1** Sniper フォーム (SPD 0.6x, ATK 2.5x, FR 0.3x)
+  - BulletType.shieldPierce — Phalanx/Sentinel のシールド無視
+  - 弾速 600, 長い弾ビジュアル
+- [x] **9.2** Scatter フォーム (SPD 1.0x, ATK 0.6x, FR 1.0x)
+  - 5方向同時発射 (±20° 扇状)
+- [x] **9.3** Guardian フォーム (SPD 0.7x, ATK 0.8x, FR 0.8x)
+  - 被ダメージ 20%軽減 (defMultiplier に加算)
+- [x] **9.4** フォームアンロック (クレジット購入)
+  - Sniper: Stage 7 + 800 Cr, Scatter: Stage 8 + 800 Cr, Guardian: Stage 10 + 1000 Cr
+  - FormSelectScreen にロック/アンロック/購入 UI
+- [x] **9.5** Refit Gate (フォーム変更)
+  - GateEffectType.refit — value=FormType index
+  - 紫色表示、ラベル「→ Heavy」等
+- [x] **9.6** Growth Gate (累積強化)
+  - GateEffectType.growth — ATK +value
+  - 緑色表示
+- [x] **9.7** Roulette Gate (ランダム)
+  - GateEffectType.roulette — 50/50 で ATK +value or +value2
+  - マゼンタ色表示
 
 ### Phase 10: Act 3 (Stage 11-15 + Boss 3)
 > 最終ステージ群とラスボス。
@@ -340,9 +333,9 @@
 | **Alpha** | 2-3 ✅ | 5敵種、コンボ/覚醒/EX、Stage 1-4 |
 | **Act 1 Complete** | 4-5 ✅ | フォーム切替、ボス戦、Stage 1-5 |
 | **Full Loop** | 6 ✅ | メタゲーム周回が成立 |
-| **Act 2 Ready** | 7 | Boss レーザー + 6新敵種 |
-| **Act 2 Complete** | 8 | Stage 6-10 + Boss 2、難易度スケーリング |
-| **Full Arsenal** | 9 | 7フォーム + 全Gate種 |
+| **Act 2 Ready** | 7 ✅ | Boss レーザー + 6新敵種 |
+| **Act 2 Complete** | 8 ✅ | Stage 6-10 + Boss 2、難易度スケーリング |
+| **Full Arsenal** | 9 ✅ | 6フォーム + 全Gate種 |
 | **Act 3 Complete** | 10 | Stage 11-15 + Boss 3、全ステージ完備 |
 | **Deep Mechanics** | 11 | スキルツリー + Graze + Parry |
 | **Replay Complete** | 12 | Endless + 実績、リプレイ性完成 |

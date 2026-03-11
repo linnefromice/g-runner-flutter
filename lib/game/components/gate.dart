@@ -41,6 +41,12 @@ class Gate extends PositionComponent with HasGameReference<GRunnerGame> {
       color = const Color(0xFFFFDD44); // Tradeoff yellow
     } else if (effect.type == GateEffectType.hpRecover) {
       color = const Color(0xFFFF69B4); // Recovery pink
+    } else if (effect.type == GateEffectType.refit) {
+      color = const Color(0xFFAA44FF); // Refit purple
+    } else if (effect.type == GateEffectType.growth) {
+      color = const Color(0xFF44DD88); // Growth green
+    } else if (effect.type == GateEffectType.roulette) {
+      color = const Color(0xFFFF44AA); // Roulette magenta
     } else {
       color = const Color(0xFF44FF88); // Enhance green
     }
@@ -94,6 +100,14 @@ class Gate extends PositionComponent with HasGameReference<GRunnerGame> {
         return 'ATK+${effect.value.toInt()} SPD${effect.value2}';
       case GateEffectType.tradeoffSpdUpAtkDown:
         return 'SPD x${effect.value} ATK${effect.value2}';
+      case GateEffectType.refit:
+        final formNames = ['Std', 'Heavy', 'Speed', 'Sniper', 'Scatter', 'Guard'];
+        final idx = effect.value.toInt().clamp(0, formNames.length - 1);
+        return '→ ${formNames[idx]}';
+      case GateEffectType.growth:
+        return 'ATK +${effect.value.toInt()}';
+      case GateEffectType.roulette:
+        return '? ATK';
     }
   }
 }

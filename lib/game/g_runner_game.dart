@@ -14,6 +14,7 @@ import 'components/particle.dart';
 import 'components/player.dart';
 import 'components/score_popup.dart';
 import 'data/constants.dart';
+import 'data/difficulty.dart';
 import 'data/stage_data.dart';
 
 enum GameState { playing, paused, gameOver, stageClear }
@@ -67,14 +68,21 @@ class GRunnerGame extends FlameGame {
   // Credits earned during this session
   int creditsEarned = 0;
 
+  // Difficulty scaling
+  late final DifficultyParams difficulty;
+
   double get logicalHeight => logicalWidth * (size.y / size.x);
 
-  double get currentScrollSpeed =>
-      isBossPhase ? baseScrollSpeed * bossScrollSpeedMultiplier : baseScrollSpeed;
+  double get currentScrollSpeed {
+    final base = baseScrollSpeed * difficulty.scrollSpeedMultiplier;
+    return isBossPhase ? base * bossScrollSpeedMultiplier : base;
+  }
 
   double get _scale => size.x / logicalWidth;
 
-  GRunnerGame({required this.stageData});
+  GRunnerGame({required this.stageData}) {
+    difficulty = getDifficultyForStage(stageData.id);
+  }
 
   @override
   Future<void> onLoad() async {
@@ -286,6 +294,12 @@ class GRunnerGame extends FlameGame {
         return formHeavyArtillery;
       case FormType.highSpeed:
         return formHighSpeed;
+      case FormType.sniper:
+        return formSniper;
+      case FormType.scatter:
+        return formScatter;
+      case FormType.guardian:
+        return formGuardian;
     }
   }
 
@@ -343,6 +357,9 @@ class GRunnerGame extends FlameGame {
             world.add(Enemy(
               type: event.enemyType!,
               position: Vector2(event.x!, -20),
+              hpMultiplier: difficulty.enemyHpMultiplier,
+              atkMultiplier: difficulty.enemyAtkMultiplier,
+              attackIntervalMultiplier: difficulty.attackIntervalMultiplier,
             ));
           }
         case SpawnEventType.gate:
@@ -361,7 +378,7 @@ class GRunnerGame extends FlameGame {
             ));
           }
         case SpawnEventType.boss:
-          final boss = Boss();
+          final boss = Boss(bossIndex: event.bossIndex);
           currentBoss = boss;
           world.add(boss);
       }
@@ -412,11 +429,10 @@ class GRunnerGame extends FlameGame {
           );
           if (bulletRect.overlaps(enemyRect)) {
             enemy.takeDamage(bullet.damage, bulletCenterY: bullet.position.y);
-            // Don't break — pierce hits all overlapping enemies
           }
         }
       } else {
-        // Normal bullet
+        // Normal / shieldPierce / scatter bullet
         for (final enemy in enemies) {
           if (!enemy.isMounted) continue;
           final enemyRect = Rect.fromCenter(
@@ -425,7 +441,11 @@ class GRunnerGame extends FlameGame {
             height: enemy.size.y,
           );
           if (bulletRect.overlaps(enemyRect)) {
-            enemy.takeDamage(bullet.damage, bulletCenterY: bullet.position.y);
+            enemy.takeDamage(
+              bullet.damage,
+              bulletCenterY: bullet.position.y,
+              shieldPierce: bullet.isShieldPierce,
+            );
             bullet.removeFromParent();
             break;
           }
@@ -596,6 +616,18 @@ class GRunnerGame extends FlameGame {
       case GateEffectType.tradeoffSpdUpAtkDown:
         player.speedMultiplier *= effect.value;
         player.atk = (player.atk * effect.value2!).round();
+      case GateEffectType.refit:
+        final formType = FormType.values[effect.value.toInt().clamp(0, FormType.values.length - 1)];
+        player.currentForm = _formDefinitionFor(formType);
+      case GateEffectType.growth:
+        player.atk += effect.value.toInt();
+      case GateEffectType.roulette:
+        final isPositive = math.Random().nextBool();
+        if (isPositive) {
+          player.atk += effect.value.toInt();
+        } else {
+          player.atk = (player.atk + effect.value2!.toInt()).clamp(1, 9999);
+        }
     }
   }
 
@@ -607,6 +639,16 @@ class GRunnerGame extends FlameGame {
       position: Vector2(x, y),
       bulletType: player.activeBulletType,
       color: player.activeBulletColor,
+    ));
+  }
+
+  void spawnPlayerBulletWithVelocity(double x, double y, {double speedX = 0}) {
+    world.add(PlayerBullet(
+      damage: player.effectiveAtk,
+      position: Vector2(x, y),
+      bulletType: player.activeBulletType,
+      color: player.activeBulletColor,
+      speedX: speedX,
     ));
   }
 

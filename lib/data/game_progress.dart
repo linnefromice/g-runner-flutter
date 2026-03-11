@@ -91,8 +91,27 @@ class GameProgress {
 
   void unlockNextStage(int clearedStageId) {
     final next = clearedStageId + 1;
-    if (next <= 5 && !unlockedStages.contains(next)) {
+    if (next <= 10 && !unlockedStages.contains(next)) {
       unlockedStages.add(next);
+    }
+  }
+
+  bool isFormUnlocked(String formKey) => unlockedForms.contains(formKey);
+
+  bool canUnlockForm(FormType type) {
+    final condition = formUnlockConditions[type];
+    if (condition == null) return false;
+    return unlockedStages.contains(condition.requiredStage) &&
+        credits >= condition.cost;
+  }
+
+  void purchaseFormUnlock(FormType type) {
+    final condition = formUnlockConditions[type];
+    if (condition == null || !canUnlockForm(type)) return;
+    credits -= condition.cost;
+    final key = type.name;
+    if (!unlockedForms.contains(key)) {
+      unlockedForms.add(key);
     }
   }
 

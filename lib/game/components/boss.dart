@@ -4,6 +4,7 @@ import 'dart:ui';
 import 'package:flame/components.dart';
 
 import '../data/constants.dart';
+import '../data/difficulty.dart';
 import '../g_runner_game.dart';
 import 'particle.dart';
 
@@ -12,8 +13,9 @@ enum BossPhase { entering, phase1, phase2, phase3 }
 enum LaserState { idle, warning, firing, cooldown }
 
 class Boss extends PositionComponent with HasGameReference<GRunnerGame> {
-  int hp = bossHp;
-  final int maxHp = bossHp;
+  final int bossIndex;
+  late final int maxHp;
+  late int hp;
   BossPhase phase = BossPhase.entering;
 
   double _shootTimer = bossShootInterval1;
@@ -27,12 +29,20 @@ class Boss extends PositionComponent with HasGameReference<GRunnerGame> {
   double _laserTickTimer = 0;
   double laserX = 0; // X position of laser center (world coords)
 
-  Boss()
+  Boss({this.bossIndex = 1})
       : super(
           size: Vector2(bossWidth, bossHeight),
           anchor: Anchor.center,
           position: Vector2(logicalWidth / 2, -bossHeight),
-        );
+        ) {
+    maxHp = getBossHp(bossIndex);
+    hp = maxHp;
+  }
+
+  int get _droneCount => bossDroneCount + (bossIndex - 1);
+
+  double get _phase2Threshold => bossIndex >= 2 ? 0.75 : bossPhase2Threshold;
+  double get _phase3Threshold => bossIndex >= 2 ? 0.50 : bossPhase3Threshold;
 
   double get hpRatio => hp / maxHp;
 
@@ -156,13 +166,13 @@ class Boss extends PositionComponent with HasGameReference<GRunnerGame> {
   void _updatePhaseTransition() {
     if (phase == BossPhase.entering) return;
 
-    if (hpRatio <= bossPhase3Threshold && phase != BossPhase.phase3) {
+    if (hpRatio <= _phase3Threshold && phase != BossPhase.phase3) {
       phase = BossPhase.phase3;
       if (!_dronesSpawned) {
         _spawnDrones();
         _dronesSpawned = true;
       }
-    } else if (hpRatio <= bossPhase2Threshold && phase == BossPhase.phase1) {
+    } else if (hpRatio <= _phase2Threshold && phase == BossPhase.phase1) {
       phase = BossPhase.phase2;
     }
   }
@@ -187,8 +197,9 @@ class Boss extends PositionComponent with HasGameReference<GRunnerGame> {
   }
 
   void _spawnDrones() {
-    final spacing = size.x / (bossDroneCount + 1);
-    for (int i = 0; i < bossDroneCount; i++) {
+    final count = _droneCount;
+    final spacing = size.x / (count + 1);
+    for (int i = 0; i < count; i++) {
       final droneX = position.x - size.x / 2 + spacing * (i + 1);
       final drone = BossDrone(
         position: Vector2(droneX, position.y + size.y / 2 + 20),

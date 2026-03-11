@@ -12,7 +12,10 @@ enum GateEffectType {
   speedMultiply,
   hpRecover,
   tradeoffAtkUpSpdDown,
-  tradeoffSpdUpAtkDown;
+  tradeoffSpdUpAtkDown,
+  refit,     // value = FormType index
+  growth,    // value = ATK add or speed multiply amount
+  roulette;  // value = positive outcome, value2 = negative outcome
 
   bool get isTradeoff =>
       this == tradeoffAtkUpSpdDown || this == tradeoffSpdUpAtkDown;
@@ -44,7 +47,8 @@ class SpawnEvent {
     required double this.x,
   })  : type = SpawnEventType.enemy,
         leftEffect = null,
-        rightEffect = null;
+        rightEffect = null,
+        bossIndex = 1;
 
   const SpawnEvent.gate({
     required this.time,
@@ -52,10 +56,15 @@ class SpawnEvent {
     required GateEffect this.rightEffect,
   })  : type = SpawnEventType.gate,
         enemyType = null,
-        x = null;
+        x = null,
+        bossIndex = 1;
+
+  // Boss spawn fields
+  final int bossIndex;
 
   const SpawnEvent.boss({
     required this.time,
+    this.bossIndex = 1,
   })  : type = SpawnEventType.boss,
         enemyType = null,
         x = null,

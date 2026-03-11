@@ -9,12 +9,14 @@ class PlayerBullet extends PositionComponent with HasGameReference<GRunnerGame> 
   final int damage;
   final BulletType bulletType;
   final Color color;
+  final double speedX;
 
   PlayerBullet({
     required this.damage,
     required Vector2 position,
     this.bulletType = BulletType.normal,
     this.color = const Color(0xFF00FFAA),
+    this.speedX = 0,
   }) : super(
           position: position,
           size: _sizeForType(bulletType),
@@ -27,28 +29,35 @@ class PlayerBullet extends PositionComponent with HasGameReference<GRunnerGame> 
         return Vector2(8, 8);
       case BulletType.pierce:
         return Vector2(3, 16);
+      case BulletType.shieldPierce:
+        return Vector2(3, 20);
+      case BulletType.scatter:
+        return Vector2(4, 10);
       case BulletType.normal:
         return Vector2(playerBulletWidth, playerBulletHeight);
     }
   }
 
-  /// Whether this bullet has already hit something (used for pierce tracking).
-  /// Pierce bullets don't get removed on first hit.
   bool get isPierce => bulletType == BulletType.pierce;
+  bool get isShieldPierce => bulletType == BulletType.shieldPierce;
 
   @override
   void update(double dt) {
     super.update(dt);
 
-    final speed = bulletType == BulletType.pierce
-        ? playerBulletSpeed * 1.25
-        : bulletType == BulletType.explosion
-            ? playerBulletSpeed * 0.75
-            : playerBulletSpeed;
+    final speed = switch (bulletType) {
+      BulletType.pierce => playerBulletSpeed * 1.25,
+      BulletType.explosion => playerBulletSpeed * 0.75,
+      BulletType.shieldPierce => sniperBulletSpeed,
+      BulletType.scatter => playerBulletSpeed * 0.95,
+      BulletType.normal => playerBulletSpeed,
+    };
 
+    position.x += speedX * dt;
     position.y -= speed * dt;
 
-    if (position.y < -playerBulletHeight) {
+    if (position.y < -playerBulletHeight ||
+        position.x < -20 || position.x > logicalWidth + 20) {
       removeFromParent();
     }
   }

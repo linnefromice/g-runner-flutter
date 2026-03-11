@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'dart:ui';
 
 import 'package:flame/components.dart';
@@ -139,13 +140,34 @@ class Player extends PositionComponent with HasGameReference<GRunnerGame> {
     fireTimer -= dt;
     if (fireTimer <= 0) {
       fireTimer = effectiveFireInterval;
-      game.spawnPlayerBullet(position.x, position.y - playerHeight / 2);
+      if (activeBulletType == BulletType.scatter) {
+        _fireScatterShot();
+      } else {
+        game.spawnPlayerBullet(position.x, position.y - playerHeight / 2);
+      }
+    }
+  }
+
+  void _fireScatterShot() {
+    final y = position.y - playerHeight / 2;
+    for (int i = 0; i < scatterBulletCount; i++) {
+      final angleOffset = (i - scatterBulletCount ~/ 2) * scatterSpreadAngle;
+      final rad = angleOffset * math.pi / 180;
+      final vx = math.sin(rad) * playerBulletSpeed * 0.95;
+      game.spawnPlayerBulletWithVelocity(
+        position.x, y, speedX: vx,
+      );
     }
   }
 
   void takeDamage(int damage) {
     if (isInvincible || isAwakenedInvincible) return;
-    final reducedDamage = (damage * defMultiplier).round();
+    double dmgMultiplier = defMultiplier;
+    // Guardian form: additional 20% reduction
+    if (currentForm.type == FormType.guardian) {
+      dmgMultiplier *= guardianDamageReduction;
+    }
+    final reducedDamage = (damage * dmgMultiplier).round();
     hp -= reducedDamage;
     if (hp < 0) hp = 0;
     isInvincible = true;

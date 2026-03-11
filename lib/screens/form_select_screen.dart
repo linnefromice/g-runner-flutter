@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../data/game_progress.dart';
 import '../game/data/constants.dart';
 import '../game/data/stage_data.dart';
 import 'game_screen.dart';
@@ -17,11 +18,24 @@ class _FormSelectScreenState extends State<FormSelectScreen> {
   FormType _primary = FormType.standard;
   FormType _secondary = FormType.heavyArtillery;
 
-  static const _allForms = [
+  static const _allFormDefs = [
     formStandard,
     formHeavyArtillery,
     formHighSpeed,
+    formSniper,
+    formScatter,
+    formGuardian,
   ];
+
+  bool _isUnlocked(FormType type) {
+    // Standard, Heavy, HighSpeed are always unlocked
+    if (type == FormType.standard ||
+        type == FormType.heavyArtillery ||
+        type == FormType.highSpeed) {
+      return true;
+    }
+    return GameProgress.instance.isFormUnlocked(type.name);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -58,7 +72,7 @@ class _FormSelectScreenState extends State<FormSelectScreen> {
             // Primary form selection
             _buildSectionLabel('PRIMARY FORM'),
             const SizedBox(height: 8),
-            _buildFormRow(
+            _buildFormGrid(
               selected: _primary,
               disabled: _secondary,
               onSelect: (f) => setState(() => _primary = f),
@@ -69,7 +83,7 @@ class _FormSelectScreenState extends State<FormSelectScreen> {
             // Secondary form selection
             _buildSectionLabel('SECONDARY FORM'),
             const SizedBox(height: 8),
-            _buildFormRow(
+            _buildFormGrid(
               selected: _secondary,
               disabled: _primary,
               onSelect: (f) => setState(() => _secondary = f),
@@ -137,31 +151,44 @@ class _FormSelectScreenState extends State<FormSelectScreen> {
     );
   }
 
-  Widget _buildFormRow({
+  Widget _buildFormGrid({
     required FormType selected,
     required FormType disabled,
     required void Function(FormType) onSelect,
   }) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: Row(
-        children: _allForms.map((form) {
+      child: Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: _allFormDefs.map((form) {
           final isSelected = form.type == selected;
           final isDisabled = form.type == disabled;
-          return Expanded(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 4),
-              child: _FormCard(
-                form: form,
-                isSelected: isSelected,
-                isDisabled: isDisabled,
-                onTap: isDisabled ? null : () => onSelect(form.type),
-              ),
+          final isLocked = !_isUnlocked(form.type);
+          return SizedBox(
+            width: 96,
+            child: _FormCard(
+              form: form,
+              isSelected: isSelected,
+              isDisabled: isDisabled || isLocked,
+              isLocked: isLocked,
+              onTap: (isDisabled || isLocked) ? null : () => onSelect(form.type),
+              onUnlock: isLocked ? () => _tryUnlock(form.type) : null,
             ),
           );
         }).toList(),
       ),
     );
+  }
+
+  void _tryUnlock(FormType type) {
+    final progress = GameProgress.instance;
+    if (progress.canUnlockForm(type)) {
+      setState(() {
+        progress.purchaseFormUnlock(type);
+        progress.save();
+      });
+    }
   }
 }
 
@@ -169,13 +196,17 @@ class _FormCard extends StatelessWidget {
   final FormDefinition form;
   final bool isSelected;
   final bool isDisabled;
+  final bool isLocked;
   final VoidCallback? onTap;
+  final VoidCallback? onUnlock;
 
   const _FormCard({
     required this.form,
     required this.isSelected,
     required this.isDisabled,
+    this.isLocked = false,
     this.onTap,
+    this.onUnlock,
   });
 
   @override
@@ -187,9 +218,9 @@ class _FormCard extends StatelessWidget {
             : const Color(0xFF555555);
 
     return GestureDetector(
-      onTap: onTap,
+      onTap: isLocked ? onUnlock : onTap,
       child: Container(
-        padding: const EdgeInsets.all(12),
+        padding: const EdgeInsets.all(8),
         decoration: BoxDecoration(
           color: isSelected
               ? form.bulletColor.withValues(alpha: 0.1)
@@ -203,25 +234,41 @@ class _FormCard extends StatelessWidget {
             Text(
               form.name,
               style: TextStyle(
-                color: isDisabled ? Colors.white24 : Colors.white,
-                fontSize: 12,
+                color: isLocked ? Colors.white24 : isDisabled ? Colors.white24 : Colors.white,
+                fontSize: 11,
                 fontWeight: FontWeight.bold,
               ),
               textAlign: TextAlign.center,
             ),
-            const SizedBox(height: 8),
-            _statRow('ATK', '${(form.atkMultiplier * 100).toInt()}%', isDisabled),
-            _statRow('SPD', '${(form.speedMultiplier * 100).toInt()}%', isDisabled),
-            _statRow('FIRE', '${(form.fireRateMultiplier * 100).toInt()}%', isDisabled),
+            const SizedBox(height: 4),
+            if (isLocked) ...[
+              const Icon(Icons.lock, color: Colors.white24, size: 16),
+              const SizedBox(height: 2),
+              Text(
+                _unlockLabel(form.type),
+                style: const TextStyle(color: Colors.white24, fontSize: 8),
+                textAlign: TextAlign.center,
+              ),
+            ] else ...[
+              _statRow('ATK', '${(form.atkMultiplier * 100).toInt()}%', isDisabled),
+              _statRow('SPD', '${(form.speedMultiplier * 100).toInt()}%', isDisabled),
+              _statRow('FIRE', '${(form.fireRateMultiplier * 100).toInt()}%', isDisabled),
+            ],
           ],
         ),
       ),
     );
   }
 
+  String _unlockLabel(FormType type) {
+    final cond = formUnlockConditions[type];
+    if (cond == null) return '';
+    return 'S${cond.requiredStage} + ${cond.cost}Cr';
+  }
+
   Widget _statRow(String label, String value, bool dim) {
     return Padding(
-      padding: const EdgeInsets.only(top: 2),
+      padding: const EdgeInsets.only(top: 1),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
@@ -229,14 +276,14 @@ class _FormCard extends StatelessWidget {
             label,
             style: TextStyle(
               color: dim ? Colors.white24 : Colors.white54,
-              fontSize: 10,
+              fontSize: 9,
             ),
           ),
           Text(
             value,
             style: TextStyle(
               color: dim ? Colors.white24 : Colors.white70,
-              fontSize: 10,
+              fontSize: 9,
               fontWeight: FontWeight.bold,
             ),
           ),

@@ -38,13 +38,18 @@ class Enemy extends PositionComponent with HasGameReference<GRunnerGame> {
   Enemy({
     required this.type,
     required Vector2 position,
-  })  : hp = _statsFor(type).hp,
-        maxHp = _statsFor(type).hp,
-        atk = _statsFor(type).atk,
-        shootInterval = _statsFor(type).shootInterval,
+    double hpMultiplier = 1.0,
+    double atkMultiplier = 1.0,
+    double attackIntervalMultiplier = 1.0,
+  })  : hp = (_statsFor(type).hp * hpMultiplier).round(),
+        maxHp = (_statsFor(type).hp * hpMultiplier).round(),
+        atk = (_statsFor(type).atk * atkMultiplier).round(),
+        shootInterval = _statsFor(type).shootInterval > 0
+            ? _statsFor(type).shootInterval * attackIntervalMultiplier
+            : 0,
         moveSpeed = _statsFor(type).moveSpeed,
         shootTimer = _statsFor(type).shootInterval > 0
-            ? _statsFor(type).shootInterval * 0.5
+            ? _statsFor(type).shootInterval * attackIntervalMultiplier * 0.5
             : 0,
         super(
           position: position,
@@ -370,18 +375,18 @@ class Enemy extends PositionComponent with HasGameReference<GRunnerGame> {
 
   // --- Damage ---
 
-  void takeDamage(int damage, {double? bulletCenterY}) {
+  void takeDamage(int damage, {double? bulletCenterY, bool shieldPierce = false}) {
     int actualDamage = damage;
 
-    // Phalanx shield: upper half blocks with damage reduction
-    if (type == EnemyType.phalanx && bulletCenterY != null) {
+    // Phalanx shield: upper half blocks with damage reduction (bypassed by shieldPierce)
+    if (type == EnemyType.phalanx && bulletCenterY != null && !shieldPierce) {
       if (bulletCenterY < position.y) {
         actualDamage = (damage * phalanxShieldDamageMultiplier).round();
       }
     }
 
-    // Sentinel: all damage reduced by shield
-    if (type == EnemyType.sentinel) {
+    // Sentinel: all damage reduced by shield (bypassed by shieldPierce)
+    if (type == EnemyType.sentinel && !shieldPierce) {
       actualDamage = (damage * sentinelShieldReduction).round();
     }
 

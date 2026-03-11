@@ -129,7 +129,7 @@ const double exBurstTickInterval = 0.1; // seconds
 const double exBurstWidth = 80; // logical units
 
 // Form definitions
-enum FormType { standard, heavyArtillery, highSpeed }
+enum FormType { standard, heavyArtillery, highSpeed, sniper, scatter, guardian }
 
 class FormDefinition {
   final FormType type;
@@ -151,7 +151,7 @@ class FormDefinition {
   });
 }
 
-enum BulletType { normal, explosion, pierce }
+enum BulletType { normal, explosion, pierce, shieldPierce, scatter }
 
 const formStandard = FormDefinition(
   type: FormType.standard,
@@ -182,6 +182,69 @@ const formHighSpeed = FormDefinition(
   bulletType: BulletType.pierce,
   bulletColor: Color(0xFF00FF88),
 );
+
+const formSniper = FormDefinition(
+  type: FormType.sniper,
+  name: 'Sniper',
+  speedMultiplier: 0.6,
+  atkMultiplier: 2.5,
+  fireRateMultiplier: 0.3,
+  bulletType: BulletType.shieldPierce,
+  bulletColor: Color(0xFFAA66FF),
+);
+
+const formScatter = FormDefinition(
+  type: FormType.scatter,
+  name: 'Scatter',
+  speedMultiplier: 1.0,
+  atkMultiplier: 0.6,
+  fireRateMultiplier: 1.0,
+  bulletType: BulletType.scatter,
+  bulletColor: Color(0xFFFFAA44),
+);
+
+const formGuardian = FormDefinition(
+  type: FormType.guardian,
+  name: 'Guardian',
+  speedMultiplier: 0.7,
+  atkMultiplier: 0.8,
+  fireRateMultiplier: 0.8,
+  bulletType: BulletType.normal,
+  bulletColor: Color(0xFF44AAFF),
+);
+
+// Scatter bullet
+const int scatterBulletCount = 5;
+const double scatterSpreadAngle = 10.0; // degrees between bullets
+
+// Guardian damage reduction
+const double guardianDamageReduction = 0.8; // 20% less damage
+
+// Sniper bullet
+const double sniperBulletSpeed = 600;
+
+// Form unlock conditions
+class FormUnlockCondition {
+  final int requiredStage;
+  final int cost;
+  const FormUnlockCondition({required this.requiredStage, required this.cost});
+}
+
+const Map<FormType, FormUnlockCondition> formUnlockConditions = {
+  FormType.sniper: FormUnlockCondition(requiredStage: 7, cost: 800),
+  FormType.scatter: FormUnlockCondition(requiredStage: 8, cost: 800),
+  FormType.guardian: FormUnlockCondition(requiredStage: 10, cost: 1000),
+};
+
+// Difficulty scaling
+const double difficultyScrollSpeedPerStage = 0.06;
+const double difficultyEnemyHpPerStage = 0.12;
+const double difficultyEnemyAtkPerStage = 0.08;
+const double difficultyBulletSpeedPerStage = 0.05;
+const double difficultyAttackIntervalPerStage = 0.04;
+const double difficultyAttackIntervalMin = 0.6;
+const int difficultyMaxConcurrentBase = 2;
+const int difficultyMaxConcurrentLimit = 7;
 
 // Transform gauge
 const double transformGaugeMax = 100;
